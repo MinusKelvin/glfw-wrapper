@@ -140,8 +140,6 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
             callbacks::monitor::initialize();
             Ok(Some(Glfw {
-                reentrance_avoidance: RefCell::new(Vec::new()),
-                processing_events: Cell::new(false),
                 _phantom: PhantomData
             }))
         } else {
@@ -153,15 +151,20 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
     }
 }
 
+thread_local! {
+    // The only things that can affect these live on the main thread
+    pub(crate) static PROCESSING_EVENTS: Cell<bool> = Cell::new(false);
+    pub(crate) static REENTRANCE_AVOIDANCE: RefCell<Vec<ToDo>> = RefCell::new(Vec::new());
+}
+
 /// Represents ownership of the GLFW library.
 pub struct Glfw {
-    reentrance_avoidance: RefCell<Vec<ToDo>>,
-    processing_events: Cell<bool>,
     _phantom: PhantomData<*const ()>
 }
 
 impl Drop for Glfw {
     fn drop(&mut self) {
+        self.process_reentrance_avoidance();
         invalidate_all_monitors();
         unsafe { ffi::glfwTerminate() };
         INIT_STATE.store(false, Ordering::SeqCst);
@@ -170,34 +173,40 @@ impl Drop for Glfw {
 
 impl Glfw {
     pub(crate) fn destroy_window(&self, ptr: *mut ffi::GLFWwindow) {
-        if self.processing_events.get() {
-            self.reentrance_avoidance.borrow_mut().push(ToDo::DestroyWindow(ptr))
+        PROCESSING_EVENTS.with(|v| if v.get() {
+            REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(ToDo::DestroyWindow(ptr)));
+            // Delayed window destruction; it may be a while before an event processing call occurs
+            // (how? some callbacks can be called outside of poll/wait events) but we don't want
+            // the user to see a window still active that's not supposed to be there.
+            unsafe { ffi::glfwHideWindow(ptr) };
         } else {
             unsafe {
                 ffi::glfwDestroyWindow(ptr);
                 Box::from_raw(ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks);
             }
-        }
+        })
     }
 
     pub(crate) fn destroy_cursor(&self, ptr: *mut ffi::GLFWcursor) {
-        if self.processing_events.get() {
-            self.reentrance_avoidance.borrow_mut().push(ToDo::DestroyCursor(ptr))
+        PROCESSING_EVENTS.with(|v| if v.get() {
+            REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(ToDo::DestroyCursor(ptr)))
         } else {
             unsafe {
                 ffi::glfwDestroyCursor(ptr);
             }
-        }
+        })
     }
 
     fn process_reentrance_avoidance(&self) {
-        let mut list = self.reentrance_avoidance.borrow_mut();
-        for todo in list.drain(..) {
-            match todo {
-                ToDo::DestroyWindow(w) => unsafe { ffi::glfwDestroyWindow(w) }
-                ToDo::DestroyCursor(c) => unsafe { ffi::glfwDestroyCursor(c) }
+        REENTRANCE_AVOIDANCE.with(|v| {
+            let mut list = v.borrow_mut();
+            for todo in list.drain(..) {
+                match todo {
+                    ToDo::DestroyWindow(w) => unsafe { ffi::glfwDestroyWindow(w) }
+                    ToDo::DestroyCursor(c) => unsafe { ffi::glfwDestroyCursor(c) }
+                }
             }
-        }
+        })
     }
 
     /// Gets a type allowing access to the parts of GLFW accessible from any thread.
@@ -249,12 +258,11 @@ impl Glfw {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga37bd57223967b4211d60ca1a0bf3c832
     pub fn poll_events(&self) -> Result<()> {
-        if self.processing_events.get() {
+        PROCESSING_EVENTS.with(|v| if v.get() {
             panic!("Call to non-rentrant function during event processing.");
-        }
-        self.processing_events.set(true);
+        });
+        self.process_reentrance_avoidance();
         unsafe { ffi::glfwPollEvents() };
-        self.processing_events.set(false);
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -264,12 +272,12 @@ impl Glfw {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga554e37d781f0a997656c26b2c56c835e
     pub fn wait_events(&self) -> Result<()> {
-        if self.processing_events.get() {
+        PROCESSING_EVENTS.with(|v| if v.get() {
             panic!("Call to non-rentrant function during event processing.");
-        }
-        self.processing_events.set(true);
+        });
+        // Avoids blocking if the last window was dropped in a callback outside poll/wait events
+        self.process_reentrance_avoidance();
         unsafe { ffi::glfwWaitEvents() };
-        self.processing_events.set(false);
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -279,12 +287,12 @@ impl Glfw {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga605a178db92f1a7f1a925563ef3ea2cf
     pub fn wait_events_timeout(&self, timeout: f64) -> Result<()> {
-        if self.processing_events.get() {
+        PROCESSING_EVENTS.with(|v| if v.get() {
             panic!("Call to non-rentrant function during event processing.");
-        }
-        self.processing_events.set(true);
+        });
+        // Avoids blocking if the last window was dropped in a callback outside poll/wait events
+        self.process_reentrance_avoidance();
         unsafe { ffi::glfwWaitEventsTimeout(timeout) };
-        self.processing_events.set(false);
         let e = get_error();
         self.process_reentrance_avoidance();
         e
