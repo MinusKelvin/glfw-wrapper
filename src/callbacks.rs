@@ -1,5 +1,8 @@
 pub mod monitor {
+    use std::panic;
+    use std::process::abort;
     use libc::c_int;
+
     use Monitor;
     use DisconnectedMonitor;
     use invalidate_monitor;
@@ -25,7 +28,7 @@ pub mod monitor {
     }
 
     extern "C" fn callback(monitor: *mut ffi::GLFWmonitor, event: c_int) {
-        unsafe {
+        if let Err(_) = panic::catch_unwind(|| unsafe {
             match event {
                 ffi::GLFW_CONNECTED => if let Some(ref mut cb) = CALLBACK {
                     cb.connected(Monitor::create_from(monitor));
@@ -38,6 +41,9 @@ pub mod monitor {
                 }
                 _ => unreachable!()
             }
+        }) {
+            eprintln!("Panic in GLFW monitor callback");
+            abort();
         }
     }
 

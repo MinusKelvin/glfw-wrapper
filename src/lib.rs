@@ -17,6 +17,7 @@
 //! - [x] Window reference (Functions and types related to windows)
 //!   - [ ] Callbacks :(
 //!   - [ ] Window Icons
+//!   - [ ] Window Attributes
 
 #[macro_use]
 extern crate enum_primitive;
@@ -27,6 +28,7 @@ use std::ffi::{ CStr, CString };
 use std::sync::atomic::{ AtomicBool, ATOMIC_BOOL_INIT, Ordering };
 use std::marker::PhantomData;
 use std::ptr;
+use std::cell::{ RefCell, Cell };
 
 use libc::{ c_int, c_char };
 use enum_primitive::FromPrimitive;
@@ -137,7 +139,11 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
         }
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
             callbacks::monitor::initialize();
-            Ok(Some(Glfw(PhantomData)))
+            Ok(Some(Glfw {
+                reentrance_avoidance: RefCell::new(Vec::new()),
+                processing_events: Cell::new(false),
+                _phantom: PhantomData
+            }))
         } else {
             INIT_STATE.store(false, Ordering::SeqCst);
             Err(get_error().unwrap_err())
@@ -148,7 +154,11 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
 }
 
 /// Represents ownership of the GLFW library.
-pub struct Glfw(PhantomData<*const ()>);
+pub struct Glfw {
+    reentrance_avoidance: RefCell<Vec<ToDo>>,
+    processing_events: Cell<bool>,
+    _phantom: PhantomData<*const ()>
+}
 
 impl Drop for Glfw {
     fn drop(&mut self) {
@@ -159,6 +169,37 @@ impl Drop for Glfw {
 }
 
 impl Glfw {
+    pub(crate) fn destroy_window(&self, ptr: *mut ffi::GLFWwindow) {
+        if self.processing_events.get() {
+            self.reentrance_avoidance.borrow_mut().push(ToDo::DestroyWindow(ptr))
+        } else {
+            unsafe {
+                ffi::glfwDestroyWindow(ptr);
+                Box::from_raw(ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks);
+            }
+        }
+    }
+
+    pub(crate) fn destroy_cursor(&self, ptr: *mut ffi::GLFWcursor) {
+        if self.processing_events.get() {
+            self.reentrance_avoidance.borrow_mut().push(ToDo::DestroyCursor(ptr))
+        } else {
+            unsafe {
+                ffi::glfwDestroyCursor(ptr);
+            }
+        }
+    }
+
+    fn process_reentrance_avoidance(&self) {
+        let mut list = self.reentrance_avoidance.borrow_mut();
+        for todo in list.drain(..) {
+            match todo {
+                ToDo::DestroyWindow(w) => unsafe { ffi::glfwDestroyWindow(w) }
+                ToDo::DestroyCursor(c) => unsafe { ffi::glfwDestroyCursor(c) }
+            }
+        }
+    }
+
     /// Gets a type allowing access to the parts of GLFW accessible from any thread.
     pub fn shared(&self) -> SharedGlfw {
         SharedGlfw(PhantomData)
@@ -200,7 +241,7 @@ impl Glfw {
         if ptr.is_null() {
             Err(get_error().unwrap_err())
         } else {
-            Ok(Window::init(ptr))
+            Ok(Window::init(self, ptr))
         }
     }
 
@@ -208,24 +249,45 @@ impl Glfw {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga37bd57223967b4211d60ca1a0bf3c832
     pub fn poll_events(&self) -> Result<()> {
+        if self.processing_events.get() {
+            panic!("Call to non-rentrant function during event processing.");
+        }
+        self.processing_events.set(true);
         unsafe { ffi::glfwPollEvents() };
-        get_error()
+        self.processing_events.set(false);
+        let e = get_error();
+        self.process_reentrance_avoidance();
+        e
     }
 
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga554e37d781f0a997656c26b2c56c835e
     pub fn wait_events(&self) -> Result<()> {
+        if self.processing_events.get() {
+            panic!("Call to non-rentrant function during event processing.");
+        }
+        self.processing_events.set(true);
         unsafe { ffi::glfwWaitEvents() };
-        get_error()
+        self.processing_events.set(false);
+        let e = get_error();
+        self.process_reentrance_avoidance();
+        e
     }
 
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga605a178db92f1a7f1a925563ef3ea2cf
     pub fn wait_events_timeout(&self, timeout: f64) -> Result<()> {
+        if self.processing_events.get() {
+            panic!("Call to non-rentrant function during event processing.");
+        }
+        self.processing_events.set(true);
         unsafe { ffi::glfwWaitEventsTimeout(timeout) };
-        get_error()
+        self.processing_events.set(false);
+        let e = get_error();
+        self.process_reentrance_avoidance();
+        e
     }
 
     /// [GLFW Reference][glfw]
@@ -318,4 +380,9 @@ impl<'a> SharedGlfw<'a> {
         let proc = ffi::glfwGetProcAddress(cstr.as_ptr());
         get_error().map(|_| { assert!(!proc.is_null()); proc })
     }
+}
+
+enum ToDo {
+    DestroyWindow(*mut ffi::GLFWwindow),
+    DestroyCursor(*mut ffi::GLFWcursor)
 }

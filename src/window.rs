@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::ffi::CString;
 use std::ptr;
 
@@ -14,27 +13,24 @@ use get_error;
 
 pub struct Window<'a> {
     pub(crate) ptr: *mut ffi::GLFWwindow,
-    _phantom: PhantomData<&'a Glfw>
+    glfw: &'a Glfw
 }
 
 impl<'a> Drop for Window<'a> {
     fn drop(&mut self) {
-        unsafe {
-            ffi::glfwDestroyWindow(self.ptr);
-            Box::from_raw(ffi::glfwGetWindowUserPointer(self.ptr) as *mut WindowCallbacks);
-        }
+        self.glfw.destroy_window(self.ptr);
     }
 }
 
 impl<'a> Window<'a> {
-    pub(crate) fn init(ptr: *mut ffi::GLFWwindow) -> Window<'a> {
+    pub(crate) fn init(glfw: &'a Glfw, ptr: *mut ffi::GLFWwindow) -> Window<'a> {
         unsafe {
             ffi::glfwSetWindowUserPointer(ptr,
                     Box::into_raw(Box::new(WindowCallbacks::default())) as *mut c_void)
         }
         Window {
             ptr: ptr,
-            _phantom: PhantomData
+            glfw: glfw
         }
     }
 
@@ -326,6 +322,6 @@ impl<'a: 'b, 'b> SharedWindow<'a, 'b> {
 }
 
 #[derive(Default)]
-struct WindowCallbacks {
+pub(crate) struct WindowCallbacks {
 
 }
