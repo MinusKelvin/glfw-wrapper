@@ -345,3 +345,30 @@ pub enum InitHint {
     CocoaChDirResources(bool),
     CocoaMenubar(bool)
 }
+
+enum_from_primitive! {
+    #[repr(i32)]
+    #[derive(Copy, Clone, Hash, Debug)]
+    pub enum WindowAttribute {
+        Focused = ffi::GLFW_FOCUSED,
+        Iconified = ffi::GLFW_ICONIFIED,
+        Maximized = ffi::GLFW_MAXIMIZED,
+        Hovered = ffi::GLFW_HOVERED,
+        Visible = ffi::GLFW_VISIBLE,
+        Resizable = ffi::GLFW_RESIZABLE,
+        Decorated = ffi::GLFW_DECORATED,
+        AutoIconify = ffi::GLFW_AUTO_ICONIFY,
+        Floating = ffi::GLFW_FLOATING,
+        TransparentFramebuffer = ffi::GLFW_TRANSPARENT_FRAMEBUFFER,
+        OpenGlForwardCompat = ffi::GLFW_OPENGL_FORWARD_COMPAT,
+        OpenGlDebugContext = ffi::GLFW_OPENGL_DEBUG_CONTEXT,
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum SetWindowAttribute {
+    Decorated(bool),
+    Resizable(bool),
+    Floating(bool),
+    AutoIconify(bool)
+}

@@ -2,12 +2,20 @@ use std::ffi::CString;
 use std::ptr;
 
 use libc::c_void;
+use enum_primitive::FromPrimitive;
 
 use ffi;
 use Glfw;
 use Result;
 use Monitor;
 use Image;
+use WindowAttribute;
+use SetWindowAttribute;
+use ContextCreationApi;
+use ContextRobustness;
+use OpenGlProfile;
+use ClientApi;
+use callbacks::*;
 use util::*;
 use get_error;
 
@@ -276,10 +284,201 @@ impl<'a> Window<'a> {
         get_error()
     }
 
-    // TODO glfwGetWindowAttrib
-    // TODO glfwSetWindowAttrib
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gacccb29947ea4b16860ebef42c2cb9337
+    pub fn get_attribute(&self, attrib: WindowAttribute) -> Result<bool> {
+        let r = unsafe { ffi::glfwGetWindowAttrib(self.ptr, attrib as i32) };
+        get_error().map(|_| cint_to_bool(r))
+    }
 
-    // TODO callbacks
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gacccb29947ea4b16860ebef42c2cb9337
+    pub fn get_client_api_attribute(&self) -> Result<ClientApi> {
+        let r = unsafe { ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_CLIENT_API) };
+        get_error().map(|_| ClientApi::from_i32(r).unwrap())
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gacccb29947ea4b16860ebef42c2cb9337
+    pub fn get_context_creation_api_attribute(&self) -> Result<ContextCreationApi> {
+        let r = unsafe { ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_CONTEXT_CREATION_API) };
+        get_error().map(|_| ContextCreationApi::from_i32(r).unwrap())
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gacccb29947ea4b16860ebef42c2cb9337
+    pub fn get_context_version_attribute(&self) -> Result<(i32, i32, i32)> {
+        let t = unsafe {(
+            ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_CONTEXT_VERSION_MAJOR),
+            ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_CONTEXT_VERSION_MINOR),
+            ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_CONTEXT_REVISION),
+        )};
+        get_error().map(|_| t)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gacccb29947ea4b16860ebef42c2cb9337
+    pub fn get_opengl_profile_attribute(&self) -> Result<OpenGlProfile> {
+        let r = unsafe { ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_OPENGL_PROFILE) };
+        get_error().map(|_| OpenGlProfile::from_i32(r).unwrap())
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gacccb29947ea4b16860ebef42c2cb9337
+    pub fn get_context_robustness_attribute(&self) -> Result<ContextRobustness> {
+        let r = unsafe { ffi::glfwGetWindowAttrib(self.ptr, ffi::GLFW_CONTEXT_ROBUSTNESS) };
+        get_error().map(|_| ContextRobustness::from_i32(r).unwrap())
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gace2afda29b4116ec012e410a6819033e
+    pub fn set_attribute(&self, attrib: SetWindowAttribute) -> Result<()> {
+        use SetWindowAttribute::*;
+        unsafe { match attrib {
+            Resizable(v) =>
+                    ffi::glfwSetWindowAttrib(self.ptr, ffi::GLFW_RESIZABLE, bool_to_cint(v)),
+            Decorated(v) =>
+                    ffi::glfwSetWindowAttrib(self.ptr, ffi::GLFW_DECORATED, bool_to_cint(v)),
+            Floating(v) =>
+                    ffi::glfwSetWindowAttrib(self.ptr, ffi::GLFW_FLOATING, bool_to_cint(v)),
+            AutoIconify(v) =>
+                    ffi::glfwSetWindowAttrib(self.ptr, ffi::GLFW_AUTO_ICONIFY, bool_to_cint(v)),
+        } }
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga2837d4d240659feb4268fcb6530a6ba1
+    pub fn set_pos_callback(&self, cb: Box<WindowPosCallback>) {
+        window_pos::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga2837d4d240659feb4268fcb6530a6ba1
+    pub fn unset_pos_callback(&self) {
+        window_pos::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaa40cd24840daa8c62f36cafc847c72b6
+    pub fn set_size_callback(&self, cb: Box<WindowSizeCallback>) {
+        window_size::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaa40cd24840daa8c62f36cafc847c72b6
+    pub fn unset_size_callback(&self) {
+        window_size::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaade9264e79fae52bdb78e2df11ee8d6a
+    pub fn set_close_callback(&self, cb: Box<WindowCloseCallback>) {
+        window_close::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaade9264e79fae52bdb78e2df11ee8d6a
+    pub fn unset_close_callback(&self) {
+        window_close::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga4569b76e8ac87c55b53199e6becd97eb
+    pub fn set_refresh_callback(&self, cb: Box<WindowRefreshCallback>) {
+        window_refresh::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga4569b76e8ac87c55b53199e6becd97eb
+    pub fn unset_refresh_callback(&self) {
+        window_refresh::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga25d1c584edb375d7711c5c3548ba711f
+    pub fn set_focus_callback(&self, cb: Box<WindowFocusCallback>) {
+        window_focus::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga25d1c584edb375d7711c5c3548ba711f
+    pub fn unset_focus_callback(&self) {
+        window_focus::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab1ea7263081c0e073b8d5b91d6ffd367
+    pub fn set_iconify_callback(&self, cb: Box<WindowIconifyCallback>) {
+        window_iconify::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab1ea7263081c0e073b8d5b91d6ffd367
+    pub fn unset_iconify_callback(&self) {
+        window_iconify::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaf8548ef61cb09150e09a6d33ddfa705e
+    pub fn set_maximize_callback(&self, cb: Box<WindowMaximizeCallback>) {
+        window_maximize::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaf8548ef61cb09150e09a6d33ddfa705e
+    pub fn unset_maximize_callback(&self) {
+        window_maximize::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga3203461a5303bf289f2e05f854b2f7cf
+    pub fn set_framebuffer_size_callback(&self, cb: Box<FramebufferSizeCallback>) {
+        framebuffer_size::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga3203461a5303bf289f2e05f854b2f7cf
+    pub fn unset_framebuffer_size_callback(&self) {
+        framebuffer_size::unset(self.ptr);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gabf3622cde4c10fac35875e24992ec26d
+    pub fn set_content_scale_callback(&self, cb: Box<WindowContentScaleCallback>) {
+        window_content_scale::set(self.ptr, cb);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gabf3622cde4c10fac35875e24992ec26d
+    pub fn unset_content_scale_callback(&self) {
+        window_content_scale::unset(self.ptr);
+    }
 }
 
 pub struct SharedWindow<'a: 'b, 'b>(&'b Window<'a>);
@@ -319,9 +518,4 @@ impl<'a: 'b, 'b> SharedWindow<'a, 'b> {
         ffi::glfwMakeContextCurrent(self.0.ptr);
         get_error()
     }
-}
-
-#[derive(Default)]
-pub(crate) struct WindowCallbacks {
-
 }

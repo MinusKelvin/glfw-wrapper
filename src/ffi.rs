@@ -406,7 +406,7 @@ extern "C" {
     pub fn glfwSetGammaRamp(monitor: *mut GLFWmonitor, ramp: *const GLFWgammaramp);
     pub fn glfwDefaultWindowHints();
     pub fn glfwWindowHint(hint: c_int, value: c_int);
-    pub fn glfwWindowHintString(hint: c_int, value: *mut c_char);
+    pub fn glfwWindowHintString(hint: c_int, value: *const c_char);
     pub fn glfwCreateWindow(width: c_int, height: c_int, title: *const c_char, monitor: *mut GLFWmonitor, share: *mut GLFWwindow) -> *mut GLFWwindow;
     pub fn glfwDestroyWindow(window: *mut GLFWwindow);
     pub fn glfwWindowShouldClose(window: *mut GLFWwindow) -> c_int;

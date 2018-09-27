@@ -15,9 +15,9 @@
 //! - [ ] Native access (Functions related to accessing native handles)
 //! - [ ] Vulkan reference (Functions and types related to Vulkan)
 //! - [x] Window reference (Functions and types related to windows)
-//!   - [ ] Callbacks :(
+//!   - [x] Callbacks
 //!   - [ ] Window Icons
-//!   - [ ] Window Attributes
+//!   - [x] Window Attributes
 
 #[macro_use]
 extern crate enum_primitive;
@@ -49,10 +49,7 @@ pub use ffi::{
     GLFW_VERSION_REVISION as VERSION_REVISION,
     GLFWglproc as GlProc
 };
-pub use callbacks::{
-    // error::Callback as ErrorCallback
-    monitor::Callback as MonitorCallback
-};
+pub use callbacks::*;
 
 mod ffi;
 mod util;
@@ -99,7 +96,7 @@ pub fn get_error() -> Result<()> {
 /// If a [`Context`] exists, this will be `true`.
 static INIT_STATE: AtomicBool = ATOMIC_BOOL_INIT;
 
-/// Initialize the GLFW library.
+/// Initialize the GLFW library. [GLFW Reference][glfw]
 /// 
 /// This function must be called on the first thread of the process, at least on Mac OS. All of the
 /// restrictions about what can and can't be done from the main thread should be encoded in the type
@@ -110,6 +107,8 @@ static INIT_STATE: AtomicBool = ATOMIC_BOOL_INIT;
 /// * `Ok(Some(_))` if no context already exists
 /// * `Ok(None)` if a context already exists
 /// * `Err(_)` if an error occured during initialization
+/// 
+/// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga317aac130a235ab08c6db0834907d85e
 pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
     extern "C" fn err_cb(code: c_int, _: *const c_char) {
         if let Some(_) = ErrorKind::from_i32(code) { return }
@@ -182,7 +181,9 @@ impl Glfw {
         } else {
             unsafe {
                 ffi::glfwDestroyWindow(ptr);
-                Box::from_raw(ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks);
+                Box::from_raw(
+                    ffi::glfwGetWindowUserPointer(ptr) as *mut callbacks::WindowCallbacks
+                );
             }
         })
     }
@@ -225,7 +226,70 @@ impl Glfw {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga7d9c8c62384b1e2821c4dc48952d2033
     pub fn window_hint<'b>(&self, hint: WindowHint<'b>) {
-        unimplemented!("Giant Window Hint Match");
+        use WindowHint::*;
+        unsafe { match hint {
+            Resizable(v) =>    ffi::glfwWindowHint(ffi::GLFW_RESIZABLE,     bool_to_cint(v)),
+            Visible(v) =>      ffi::glfwWindowHint(ffi::GLFW_VISIBLE,       bool_to_cint(v)),
+            Decorated(v) =>    ffi::glfwWindowHint(ffi::GLFW_DECORATED,     bool_to_cint(v)),
+            Focused(v) =>      ffi::glfwWindowHint(ffi::GLFW_FOCUSED,       bool_to_cint(v)),
+            AutoIconify(v) =>  ffi::glfwWindowHint(ffi::GLFW_AUTO_ICONIFY,  bool_to_cint(v)),
+            Floating(v) =>     ffi::glfwWindowHint(ffi::GLFW_FLOATING,      bool_to_cint(v)),
+            Maximized(v) =>    ffi::glfwWindowHint(ffi::GLFW_MAXIMIZED,     bool_to_cint(v)),
+            CenterCursor(v) => ffi::glfwWindowHint(ffi::GLFW_CENTER_CURSOR, bool_to_cint(v)),
+            Stereo(v) =>       ffi::glfwWindowHint(ffi::GLFW_STEREO,        bool_to_cint(v)),
+            SrgbCapable(v) =>  ffi::glfwWindowHint(ffi::GLFW_SRGB_CAPABLE,  bool_to_cint(v)),
+            DoubleBuffer(v) => ffi::glfwWindowHint(ffi::GLFW_DOUBLEBUFFER,  bool_to_cint(v)),
+            TransparentFramebuffer(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_TRANSPARENT_FRAMEBUFFER, bool_to_cint(v)),
+
+            RedBits(v) =>        ffi::glfwWindowHint(ffi::GLFW_RED_BITS,         v.or_dont_care()),
+            GreenBits(v) =>      ffi::glfwWindowHint(ffi::GLFW_GREEN_BITS,       v.or_dont_care()),
+            BlueBits(v) =>       ffi::glfwWindowHint(ffi::GLFW_BLUE_BITS,        v.or_dont_care()),
+            AlphaBits(v) =>      ffi::glfwWindowHint(ffi::GLFW_ALPHA_BITS,       v.or_dont_care()),
+            DepthBits(v) =>      ffi::glfwWindowHint(ffi::GLFW_DEPTH_BITS,       v.or_dont_care()),
+            StencilBits(v) =>    ffi::glfwWindowHint(ffi::GLFW_STENCIL_BITS,     v.or_dont_care()),
+            AccumRedBits(v) =>   ffi::glfwWindowHint(ffi::GLFW_ACCUM_RED_BITS,   v.or_dont_care()),
+            AccumGreenBits(v) => ffi::glfwWindowHint(ffi::GLFW_ACCUM_GREEN_BITS, v.or_dont_care()),
+            AccumBlueBits(v) =>  ffi::glfwWindowHint(ffi::GLFW_ACCUM_BLUE_BITS,  v.or_dont_care()),
+            AccumAlphaBits(v) => ffi::glfwWindowHint(ffi::GLFW_ACCUM_ALPHA_BITS, v.or_dont_care()),
+
+            AuxiliaryBuffers(v) => ffi::glfwWindowHint(ffi::GLFW_AUX_BUFFERS,  v.or_dont_care()),
+            Samples(v) =>          ffi::glfwWindowHint(ffi::GLFW_SAMPLES,      v.or_dont_care()),
+            RefreshRate(v) =>      ffi::glfwWindowHint(ffi::GLFW_REFRESH_RATE, v.or_dont_care()),
+
+            ClientApi(v) =>          ffi::glfwWindowHint(ffi::GLFW_CLIENT_API,           v as i32),
+            ContextCreationApi(v) => ffi::glfwWindowHint(ffi::GLFW_CONTEXT_CREATION_API, v as i32),
+            ContextRobustness(v) =>  ffi::glfwWindowHint(ffi::GLFW_CONTEXT_ROBUSTNESS,   v as i32),
+            OpenGlProfile(v) =>      ffi::glfwWindowHint(ffi::GLFW_OPENGL_PROFILE,       v as i32),
+            ContextReleaseBehavior(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_CONTEXT_RELEASE_BEHAVIOR, v as i32),
+
+            ContextVersionMajor(v) => ffi::glfwWindowHint(ffi::GLFW_CONTEXT_VERSION_MAJOR, v),
+            ContextVersionMinor(v) => ffi::glfwWindowHint(ffi::GLFW_CONTEXT_VERSION_MINOR, v),
+
+            OpenGlForwardCompat(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_OPENGL_FORWARD_COMPAT, bool_to_cint(v)),
+            OpenGlDebugContext(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_OPENGL_DEBUG_CONTEXT, bool_to_cint(v)),
+
+            CocoaRetinaFramebuffer(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_COCOA_RETINA_FRAMEBUFFER, bool_to_cint(v)),
+            CocoaGraphicsSwitching(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_COCOA_GRAPHICS_SWITCHING, bool_to_cint(v)),
+            CocoaFrameName(v) => {
+                let cstr = CString::new(v).unwrap();
+                ffi::glfwWindowHintString(ffi::GLFW_COCOA_FRAME_NAME, cstr.as_ptr())
+            }
+
+            X11ClassName(v) => {
+                let cstr = CString::new(v).unwrap();
+                ffi::glfwWindowHintString(ffi::GLFW_X11_CLASS_NAME, cstr.as_ptr())
+            }
+            X11InstanceName(v) => {
+                let cstr = CString::new(v).unwrap();
+                ffi::glfwWindowHintString(ffi::GLFW_X11_INSTANCE_NAME, cstr.as_ptr())
+            }
+        } }
     }
 
     /// [GLFW Reference][glfw]
