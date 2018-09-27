@@ -5,7 +5,9 @@ authors = ["MinusKelvin <minuskelvin.carlson@gmail.com>"]
 
 [dependencies]
 libc = "0.2"
-enum_primitive = "*"
+enum_primitive = "0.1"
+bitflags = "1.0"
+scopeguard = "0.3"
 
 [dependencies.glfw-sys]
 path = "../glfw-sys"

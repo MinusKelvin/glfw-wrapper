@@ -74,28 +74,27 @@ macro_rules! window_callback {
             fn callback(&mut self, $($arg_n: $arg_t),*);
         }
 
-        pub(crate) fn set(ptr: *mut ffi::GLFWwindow, cb: Box<Callback>) {
-            unsafe {
-                let callbacks = &mut *(ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks);
-                callbacks.$name = Some(cb);
-                ffi::$glfw(ptr, Some(callback));
+        impl<F> Callback for F where F: FnMut($($arg_t),*) {
+            fn callback(&mut self, $($arg_n: $arg_t),*) {
+                self($($arg_n),*)
             }
         }
 
-        pub(crate) fn unset(ptr: *mut ffi::GLFWwindow) {
+        pub(crate) fn set(ptr: *mut ffi::GLFWwindow) {
             unsafe {
-                let callbacks = &mut *(ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks);
-                callbacks.$name = None;
-                ffi::$glfw(ptr, None);
+                ffi::$glfw(ptr, Some(callback));
             }
         }
 
         extern "C" fn callback(ptr: *mut ffi::GLFWwindow, $($glfw_n: $glfw_t),*) {
             if let Err(_) = panic::catch_unwind(|| unsafe {
                 PROCESSING_EVENTS.with(|v| v.set(true));
-                let callbacks = &mut *(ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks);
-                if let Some(ref mut cb) = callbacks.$name {
-                    cb.callback($($transform),*);
+                let callbacks = ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks;
+                if !callbacks.is_null() {
+                    let callbacks = &mut *callbacks;
+                    if let Some(ref mut cb) = callbacks.$name {
+                        cb.callback($($transform),*);
+                    }
                 }
                 PROCESSING_EVENTS.with(|v| v.set(false));
             }) {
@@ -109,8 +108,12 @@ macro_rules! window_callback {
 macro_rules! window_callbacks {
     ($($name:ident: $tname:ident {$(use $s:path;)* args $($v:tt)*})*) => {
         #[derive(Default)]
-        pub(crate) struct WindowCallbacks {
-            $($name: Option<Box<$tname>>),*
+        pub struct WindowCallbacks<'a> {
+            $(pub(crate) $name: Option<Box<$tname + 'a>>),*
+        }
+
+        pub(crate) fn init_callbacks(ptr: *mut ::ffi::GLFWwindow) {
+            $($name::set(ptr);)*
         }
 
         $(
@@ -128,14 +131,14 @@ window_callbacks! {
         use libc::c_int;
         args = x: i32, y: i32;
         glfw = glfwSetWindowPosCallback;
-        transform = x: c_int, y: c_int => x as i32, y as i32;
+        transform = x: c_int, y: c_int => x, y;
     }
 
     window_size: WindowSizeCallback {
         use libc::c_int;
         args = width: i32, height: i32;
         glfw = glfwSetWindowSizeCallback;
-        transform = x: c_int, y: c_int => x as i32, y as i32;
+        transform = x: c_int, y: c_int => x, y;
     }
 
     window_close: WindowCloseCallback {
@@ -178,7 +181,7 @@ window_callbacks! {
         use libc::c_int;
         args = width: i32, height: i32;
         glfw = glfwSetFramebufferSizeCallback;
-        transform = width: c_int, height: c_int => width as i32, height as i32;
+        transform = width: c_int, height: c_int => width, height;
     }
 
     window_content_scale: WindowContentScaleCallback {
@@ -186,5 +189,64 @@ window_callbacks! {
         args = xscale: f32, yscale: f32;
         glfw = glfwSetWindowContentScaleCallback;
         transform = xscale: c_float, yscale: c_float => xscale, yscale;
+    }
+
+    mouse_button: MouseButtonCallback {
+        use libc::c_int;
+        use enum_primitive::FromPrimitive;
+        use MouseButton;
+        use Action;
+        use Modifiers;
+        args = button: MouseButton, action: Action, mods: Modifiers;
+        glfw = glfwSetMouseButtonCallback;
+        transform = button: c_int, action: c_int, mods: c_int =>
+                MouseButton::from_i32(button).unwrap(),
+                Action::from_i32(action).unwrap(),
+                Modifiers::from_bits(mods).unwrap();
+    }
+
+    cursor_pos: CursorPosCallback {
+        use libc::c_double;
+        args = x: f64, y: f64;
+        glfw = glfwSetCursorPosCallback;
+        transform = x: c_double, y: c_double => x, y;
+    }
+
+    cursor_enter: CursorEnterCallback {
+        use libc::c_int;
+        use cint_to_bool;
+        args = entered: bool;
+        glfw = glfwSetCursorEnterCallback;
+        transform = entered: c_int => cint_to_bool(entered);
+    }
+
+    scroll: ScrollCallback {
+        use libc::c_double;
+        args = xoffset: f64, yoffset: f64;
+        glfw = glfwSetScrollCallback;
+        transform = xoffset: c_double, yoffset: c_double => xoffset, yoffset;
+    }
+
+    key: KeyCallback {
+        use libc::c_int;
+        use enum_primitive::FromPrimitive;
+        use KeyAction;
+        use Key;
+        use KeyCode;
+        use Modifiers;
+        args = key: Key, action: KeyAction, mods: Modifiers;
+        glfw = glfwSetKeyCallback;
+        transform = key: c_int, scancode: c_int, action: c_int, mods: c_int =>
+                KeyCode::from_i32(key).map_or(Key::Unknown(scancode), |c| Key::Known(c, scancode)),
+                KeyAction::from_i32(action).unwrap(),
+                Modifiers::from_bits(mods).unwrap();
+    }
+
+    char: CharCallback {
+        use libc::c_uint;
+        use std::char::from_u32;
+        args = char: char;
+        glfw = glfwSetCharCallback;
+        transform = char: c_uint => from_u32(char).unwrap();
     }
 }

@@ -21,6 +21,10 @@
 
 #[macro_use]
 extern crate enum_primitive;
+#[macro_use]
+extern crate bitflags;
+#[macro_use]
+extern crate scopeguard;
 extern crate libc;
 
 use std::borrow::Cow;
@@ -181,9 +185,6 @@ impl Glfw {
         } else {
             unsafe {
                 ffi::glfwDestroyWindow(ptr);
-                Box::from_raw(
-                    ffi::glfwGetWindowUserPointer(ptr) as *mut callbacks::WindowCallbacks
-                );
             }
         })
     }
@@ -422,8 +423,8 @@ impl<'a> SharedGlfw<'a> {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga1c04dc242268f827290fe40aa1c91157
-    pub fn clear_current_context(&self) -> Result<()> {
-        unsafe { ffi::glfwMakeContextCurrent(ptr::null_mut()) };
+    pub unsafe fn clear_current_context(&self) -> Result<()> {
+        ffi::glfwMakeContextCurrent(ptr::null_mut());
         get_error()
     }
 

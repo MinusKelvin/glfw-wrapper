@@ -31,14 +31,11 @@ impl<'a> Drop for Window<'a> {
 }
 
 impl<'a> Window<'a> {
-    pub(crate) fn init(glfw: &'a Glfw, ptr: *mut ffi::GLFWwindow) -> Window<'a> {
-        unsafe {
-            ffi::glfwSetWindowUserPointer(ptr,
-                    Box::into_raw(Box::new(WindowCallbacks::default())) as *mut c_void)
-        }
+    pub(crate) fn init(glfw: &'a Glfw, ptr: *mut ffi::GLFWwindow) -> Self {
+        init_callbacks(ptr);
         Window {
             ptr: ptr,
-            glfw: glfw
+            glfw: glfw,
         }
     }
 
@@ -354,130 +351,15 @@ impl<'a> Window<'a> {
         get_error()
     }
 
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga2837d4d240659feb4268fcb6530a6ba1
-    pub fn set_pos_callback(&self, cb: Box<WindowPosCallback>) {
-        window_pos::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga2837d4d240659feb4268fcb6530a6ba1
-    pub fn unset_pos_callback(&self) {
-        window_pos::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaa40cd24840daa8c62f36cafc847c72b6
-    pub fn set_size_callback(&self, cb: Box<WindowSizeCallback>) {
-        window_size::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaa40cd24840daa8c62f36cafc847c72b6
-    pub fn unset_size_callback(&self) {
-        window_size::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaade9264e79fae52bdb78e2df11ee8d6a
-    pub fn set_close_callback(&self, cb: Box<WindowCloseCallback>) {
-        window_close::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaade9264e79fae52bdb78e2df11ee8d6a
-    pub fn unset_close_callback(&self) {
-        window_close::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga4569b76e8ac87c55b53199e6becd97eb
-    pub fn set_refresh_callback(&self, cb: Box<WindowRefreshCallback>) {
-        window_refresh::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga4569b76e8ac87c55b53199e6becd97eb
-    pub fn unset_refresh_callback(&self) {
-        window_refresh::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga25d1c584edb375d7711c5c3548ba711f
-    pub fn set_focus_callback(&self, cb: Box<WindowFocusCallback>) {
-        window_focus::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga25d1c584edb375d7711c5c3548ba711f
-    pub fn unset_focus_callback(&self) {
-        window_focus::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab1ea7263081c0e073b8d5b91d6ffd367
-    pub fn set_iconify_callback(&self, cb: Box<WindowIconifyCallback>) {
-        window_iconify::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab1ea7263081c0e073b8d5b91d6ffd367
-    pub fn unset_iconify_callback(&self) {
-        window_iconify::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaf8548ef61cb09150e09a6d33ddfa705e
-    pub fn set_maximize_callback(&self, cb: Box<WindowMaximizeCallback>) {
-        window_maximize::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaf8548ef61cb09150e09a6d33ddfa705e
-    pub fn unset_maximize_callback(&self) {
-        window_maximize::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga3203461a5303bf289f2e05f854b2f7cf
-    pub fn set_framebuffer_size_callback(&self, cb: Box<FramebufferSizeCallback>) {
-        framebuffer_size::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga3203461a5303bf289f2e05f854b2f7cf
-    pub fn unset_framebuffer_size_callback(&self) {
-        framebuffer_size::unset(self.ptr);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gabf3622cde4c10fac35875e24992ec26d
-    pub fn set_content_scale_callback(&self, cb: Box<WindowContentScaleCallback>) {
-        window_content_scale::set(self.ptr, cb);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gabf3622cde4c10fac35875e24992ec26d
-    pub fn unset_content_scale_callback(&self) {
-        window_content_scale::unset(self.ptr);
+    /// This function stands in for all of the `glfwSet*Callback` functions.
+    pub fn with_callbacks<'b, F, T>(&self, callbacks: &mut WindowCallbacks<'b>, f: F) -> T
+    where F: FnOnce() -> T {
+        let prev = unsafe { ffi::glfwGetWindowUserPointer(self.ptr) };
+        unsafe { ffi::glfwSetWindowUserPointer(self.ptr,
+                callbacks as *mut WindowCallbacks<'b> as *mut c_void) };
+        // Defer to be safe on unwind
+        defer!(unsafe { ffi::glfwSetWindowUserPointer(self.ptr, prev) });
+        f()
     }
 }
 

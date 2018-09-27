@@ -1,9 +1,10 @@
+use libc::c_int;
 use ffi;
 
 enum_from_primitive! {
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum Action {
+    pub enum KeyAction {
         Release = ffi::GLFW_RELEASE,
         Press = ffi::GLFW_PRESS,
         Repeat = ffi::GLFW_REPEAT
@@ -13,8 +14,16 @@ enum_from_primitive! {
 enum_from_primitive! {
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum Key {
-        Unknown = ffi::GLFW_KEY_UNKNOWN,
+    pub enum Action {
+        Release = ffi::GLFW_RELEASE,
+        Press = ffi::GLFW_PRESS
+    }
+}
+
+enum_from_primitive! {
+    #[repr(i32)]
+    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+    pub enum KeyCode {
         Space = ffi::GLFW_KEY_SPACE,
         Apostrophe = ffi::GLFW_KEY_APOSTROPHE,
         Comma = ffi::GLFW_KEY_COMMA,
@@ -137,6 +146,12 @@ enum_from_primitive! {
         RightSuper = ffi::GLFW_KEY_RIGHT_SUPER,
         Menu = ffi::GLFW_KEY_MENU
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Key {
+    Known(KeyCode, i32),
+    Unknown(i32)
 }
 
 enum_from_primitive! {
@@ -371,4 +386,15 @@ pub enum SetWindowAttribute {
     Resizable(bool),
     Floating(bool),
     AutoIconify(bool)
+}
+
+bitflags! {
+    pub struct Modifiers: c_int {
+        const Shift = ffi::GLFW_MOD_SHIFT;
+        const Control = ffi::GLFW_MOD_CONTROL;
+        const Alt = ffi::GLFW_MOD_ALT;
+        const Super = ffi::GLFW_MOD_SUPER;
+        const CapsLock = ffi::GLFW_MOD_CAPS_LOCK;
+        const NumLock = ffi::GLFW_MOD_NUM_LOCK;
+    }
 }
