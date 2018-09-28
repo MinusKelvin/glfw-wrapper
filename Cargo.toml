@@ -1,7 +1,12 @@
 [package]
-name = "glfw"
+name = "glfw-wrapper"
 version = "0.1.0"
-authors = ["MinusKelvin <minuskelvin.carlson@gmail.com>"]
+authors = ["MinusKelvin <me@minuskelvin.net>"]
+description = "A safe and thin wrapper around the [GLFW] window and context creation library."
+repository = "https://github.com/MinusKelvin/glfw-wrapper.git"
+readme = "README.md"
+keywords = ["glfw", "windowing", "opengl"]
+license = "MIT"
 
 [dependencies]
 libc = "0.2"
@@ -10,4 +15,5 @@ bitflags = "1.0"
 scopeguard = "0.3"
 
 [dependencies.glfw-sys]
-path = "../glfw-sys"
+git = "https://github.com/MinusKelvin/glfw-sys"
+version = "3.3"
