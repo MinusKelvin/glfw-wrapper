@@ -1,23 +1,9 @@
 //! TODO:
-//! - [x] Context reference (Functions and types related to OpenGL and OpenGL ES contexts)
-//! - [x] Initialization, version and error reference (Functions and types related to initialization and error handling)
-//!   - [x] Error codes (Error codes)
-//! - [ ] Input reference (Functions and types related to input handling)
-//!   - [ ] Gamepad axes (Gamepad axes)
-//!   - [ ] Gamepad buttons (Gamepad buttons)
-//!   - [ ] Joystick hat states
-//!   - [ ] Joysticks (Joystick IDs)
-//!   - [ ] Keyboard keys (Keyboard key IDs)
-//!   - [ ] Modifier key flags (Modifier key flags)
-//!   - [ ] Mouse buttons (Mouse button IDs)
-//!   - [ ] Standard cursor shapes (Standard system cursor shapes)
-//! - [x] Monitor reference (Functions and types related to monitors)
-//! - [ ] Native access (Functions related to accessing native handles)
-//! - [ ] Vulkan reference (Functions and types related to Vulkan)
-//! - [x] Window reference (Functions and types related to windows)
-//!   - [x] Callbacks
-//!   - [ ] Window Icons
-//!   - [x] Window Attributes
+//! - [Vulkan](http://www.glfw.org/docs/3.3/group__vulkan.html)
+//! - [Native access](http://www.glfw.org/docs/3.3/group__native.html)
+//! - Documentation
+//! 
+//! All other functionality should be exposed.
 
 #[macro_use]
 extern crate enum_primitive;
@@ -33,6 +19,7 @@ use std::sync::atomic::{ AtomicBool, ATOMIC_BOOL_INIT, Ordering };
 use std::marker::PhantomData;
 use std::ptr;
 use std::cell::{ RefCell, Cell };
+use std::slice;
 
 use libc::{ c_int, c_char };
 use enum_primitive::FromPrimitive;
@@ -41,12 +28,12 @@ mod enums;
 mod callbacks;
 mod window;
 mod monitor;
-mod image;
+mod misc;
 
 pub use enums::*;
 pub use window::*;
 pub use monitor::*;
-pub use image::*;
+pub use misc::*;
 pub use ffi::{
     GLFW_VERSION_MAJOR as VERSION_MAJOR,
     GLFW_VERSION_MINOR as VERSION_MINOR,
@@ -68,16 +55,29 @@ pub struct Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// [GLFW Reference][glfw]
+/// 
+/// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga9f8ffaacf3c269cc48eafbf8b9b71197
 pub fn get_version() -> (i32, i32, i32) {
     let mut triplet = (0, 0, 0);
     unsafe { ffi::glfwGetVersion(&mut triplet.0, &mut triplet.1, &mut triplet.2) };
     triplet
 }
 
+/// [GLFW Reference][glfw]
+/// 
+/// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga23d47dc013fce2bf58036da66079a657
 pub fn get_version_string() -> Cow<'static, str> {
     unsafe { CStr::from_ptr(ffi::glfwGetVersionString()) }.to_string_lossy()
 }
 
+/// [GLFW Reference][glfw]
+/// 
+/// Currently, all functions that the documentation says could result in errors other than
+/// `GLFW_NOT_INITIALIZED` and `GLFW_INVALID_ENUM` return a result obtained from calling this
+/// function, clearing the error. Until this changes, this function should always return `Ok`.
+/// 
+/// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga944986b4ec0b928d488141f92982aa18
 pub fn get_error() -> Result<()> {
     unsafe {
         let mut desc = std::ptr::null();
@@ -157,7 +157,8 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
 thread_local! {
     // The only things that can affect these live on the main thread
     pub(crate) static PROCESSING_EVENTS: Cell<bool> = Cell::new(false);
-    pub(crate) static REENTRANCE_AVOIDANCE: RefCell<Vec<ToDo>> = RefCell::new(Vec::new());
+    pub(crate) static REENTRANCE_AVOIDANCE: RefCell<Vec<ReentranceAvoidanceCommand>> =
+            RefCell::new(Vec::new());
 }
 
 /// Represents ownership of the GLFW library.
@@ -177,7 +178,8 @@ impl Drop for Glfw {
 impl Glfw {
     pub(crate) fn destroy_window(&self, ptr: *mut ffi::GLFWwindow) {
         PROCESSING_EVENTS.with(|v| if v.get() {
-            REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(ToDo::DestroyWindow(ptr)));
+            use ReentranceAvoidanceCommand::DestroyWindow;
+            REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(DestroyWindow(ptr)));
             // Delayed window destruction; it may be a while before an event processing call occurs
             // (how? some callbacks can be called outside of poll/wait events) but we don't want
             // the user to see a window still active that's not supposed to be there.
@@ -191,7 +193,8 @@ impl Glfw {
 
     pub(crate) fn destroy_cursor(&self, ptr: *mut ffi::GLFWcursor) {
         PROCESSING_EVENTS.with(|v| if v.get() {
-            REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(ToDo::DestroyCursor(ptr)))
+            use ReentranceAvoidanceCommand::DestroyCursor;
+            REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(DestroyCursor(ptr)))
         } else {
             unsafe {
                 ffi::glfwDestroyCursor(ptr);
@@ -203,9 +206,10 @@ impl Glfw {
         REENTRANCE_AVOIDANCE.with(|v| {
             let mut list = v.borrow_mut();
             for todo in list.drain(..) {
+                use ReentranceAvoidanceCommand::*;
                 match todo {
-                    ToDo::DestroyWindow(w) => unsafe { ffi::glfwDestroyWindow(w) }
-                    ToDo::DestroyCursor(c) => unsafe { ffi::glfwDestroyCursor(c) }
+                    DestroyWindow(w) => unsafe { ffi::glfwDestroyWindow(w) }
+                    DestroyCursor(c) => unsafe { ffi::glfwDestroyCursor(c) }
                 }
             }
         })
@@ -272,6 +276,8 @@ impl Glfw {
                     ffi::glfwWindowHint(ffi::GLFW_OPENGL_FORWARD_COMPAT, bool_to_cint(v)),
             OpenGlDebugContext(v) =>
                     ffi::glfwWindowHint(ffi::GLFW_OPENGL_DEBUG_CONTEXT, bool_to_cint(v)),
+            ContextNoError(v) =>
+                    ffi::glfwWindowHint(ffi::GLFW_CONTEXT_NO_ERROR, bool_to_cint(v)),
 
             CocoaRetinaFramebuffer(v) =>
                     ffi::glfwWindowHint(ffi::GLFW_COCOA_RETINA_FRAMEBUFFER, bool_to_cint(v)),
@@ -312,11 +318,10 @@ impl Glfw {
             monitor.map_or(ptr::null_mut(), |m| m.get_ptr()),
             share.map_or(ptr::null_mut(), |w| w.ptr)
         )};
-        if ptr.is_null() {
-            Err(get_error().unwrap_err())
-        } else {
-            Ok(Window::init(self, ptr))
-        }
+        get_error().map(|_| {
+            assert!(!ptr.is_null());
+            Window::init(self, ptr)
+        })
     }
 
     /// [GLFW Reference][glfw]
@@ -382,11 +387,8 @@ impl Glfw {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#ga721867d84c6d18d6790d64d2847ca0b1
     pub fn get_primary_monitor(&self) -> Option<Monitor> {
-        let ptr = unsafe { ffi::glfwGetPrimaryMonitor() };
-        if ptr.is_null() {
-            None
-        } else {
-            Some(Monitor::create_from(ptr))
+        unsafe {
+            ffi::glfwGetPrimaryMonitor().as_mut().map(|p| Monitor::create_from(p))
         }
     }
 
@@ -402,6 +404,191 @@ impl Glfw {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#gac3fe0f647f68b731f99756cd81897378
     pub fn unset_monitor_callback(&self) {
         callbacks::monitor::unset();
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga237a182e5ec0b21ce64543f3b5e7e2be
+    pub fn get_key_name(&self, key: Key) -> Result<Option<String>> {
+        let ptr = unsafe { match key {
+            Key::Known(kc) => ffi::glfwGetKeyName(kc as i32, 0),
+            Key::Unknown(sc) => ffi::glfwGetKeyName(ffi::GLFW_KEY_UNKNOWN, sc)
+        } };
+        get_error().map(|_| unsafe {
+            ptr.as_ref().map(|p| CStr::from_ptr(p).to_string_lossy().into_owned())
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga67ddd1b7dcbbaff03e4a76c0ea67103a
+    pub fn get_key_scancode(&self, keycode: KeyCode) -> Result<i32> {
+        let sc = unsafe { ffi::glfwGetKeyScancode(keycode as i32) };
+        get_error().map(|_| sc)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gafca356935e10135016aa49ffa464c355
+    pub fn create_cursor(&self, image: &Image, xhot: i32, yhot: i32) -> Result<Cursor> {
+        let image = image.as_glfw_image();
+        let ptr = unsafe { ffi::glfwCreateCursor(&image, xhot, yhot) };
+        get_error().map(|_| {
+            assert!(!ptr.is_null());
+            Cursor {
+                ptr: ptr,
+                glfw: self
+            }
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaa65f416d03ebbbb5b8db71a489fcb894
+    pub fn create_standard_cursor(&self, shape: StandardCursorShape) -> Result<Cursor> {
+        let ptr = unsafe { ffi::glfwCreateStandardCursor(shape as i32) };
+        get_error().map(|_| {
+            assert!(!ptr.is_null());
+            Cursor {
+                ptr: ptr,
+                glfw: self
+            }
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaed0966cee139d815317f9ffcba64c9f1
+    pub fn is_joystick_present(&self, joystick: Joystick) -> Result<bool> {
+        let v = unsafe { ffi::glfwJoystickPresent(joystick as i32) };
+        get_error().map(|_| cint_to_bool(v))
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaa8806536731e92c061bc70bcff6edbd0
+    pub fn get_joystick_axes(&self, joystick: Joystick) -> Result<Option<Vec<f32>>> {
+        let mut count = 0;
+        let ptr = unsafe { ffi::glfwGetJoystickAxes(joystick as i32, &mut count) };
+        get_error().map(|_| unsafe {
+            ptr.as_ref().map(|p| slice::from_raw_parts(p, count as usize).to_owned())
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gadb3cbf44af90a1536f519659a53bddd6
+    pub fn get_joystick_buttons(&self, joystick: Joystick) -> Result<Option<Vec<bool>>> {
+        let mut count = 0;
+        let ptr = unsafe { ffi::glfwGetJoystickButtons(joystick as i32, &mut count) };
+        get_error().map(|_| unsafe {
+            ptr.as_ref().map(|p| slice::from_raw_parts(p, count as usize)
+                    .iter().map(|c| cuchar_to_bool(*c)).collect())
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga2d8d0634bb81c180899aeb07477a67ea
+    pub fn get_joystick_hats(&self, joystick: Joystick) -> Result<Option<Vec<JoystickHat>>> {
+        let mut count = 0;
+        let ptr = unsafe { ffi::glfwGetJoystickHats(joystick as i32, &mut count) };
+        get_error().map(|_| unsafe {
+            ptr.as_ref().map(|p| slice::from_raw_parts(p, count as usize)
+                    .iter().map(|c| JoystickHat::from_bits(*c).unwrap()).collect())
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gafbe3e51f670320908cfe4e20d3e5559e
+    pub fn get_joystick_name(&self, joystick: Joystick) -> Result<Option<String>> {
+        let ptr = unsafe { ffi::glfwGetJoystickName(joystick as i32) };
+        get_error().map(|_| unsafe {
+            ptr.as_ref().map(|p| CStr::from_ptr(p).to_string_lossy().into_owned())
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gae168c2c0b8cf2a1cb67c6b3c00bdd543
+    pub fn get_joystick_guid(&self, joystick: Joystick) -> Result<Option<String>> {
+        let ptr = unsafe { ffi::glfwGetJoystickGUID(joystick as i32) };
+        get_error().map(|_| unsafe {
+            ptr.as_ref().map(|p| CStr::from_ptr(p).to_string_lossy().into_owned())
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gad0f676860f329d80f7e47e9f06a96f00
+    pub fn is_joystick_gamepad(&self, joystick: Joystick) -> bool {
+        cint_to_bool(unsafe { ffi::glfwJoystickIsGamepad(joystick as i32) })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gab1dc8379f1b82bb660a6b9c9fa06ca07
+    pub fn set_joystick_callback(&self, callback: Box<JoystickCallback>) {
+        joystick::set(callback);
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gab1dc8379f1b82bb660a6b9c9fa06ca07
+    pub fn unset_joystick_callback(&self) {
+        joystick::unset();
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaed5104612f2fa8e66aa6e846652ad00f
+    pub fn update_gamepad_mappings(&self, mapping: &str) -> Result<()> {
+        let cstr = CString::new(mapping).unwrap();
+        unsafe { ffi::glfwUpdateGamepadMappings(cstr.as_ptr()) };
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga5c71e3533b2d384db9317fcd7661b210
+    pub fn get_gamepad_name(&self, joystick: Joystick) -> Option<String> {
+        unsafe {
+            let ptr = ffi::glfwGetGamepadName(joystick as i32);
+            ptr.as_ref().map(|p| CStr::from_ptr(p).to_string_lossy().into_owned())
+        }
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gadccddea8bce6113fa459de379ddaf051
+    pub fn get_gamepad_state(&self, joystick: Joystick) -> Option<GamepadState> {
+        let mut gamepad = ffi::GLFWgamepadstate::default();
+        if cint_to_bool(unsafe { ffi::glfwGetGamepadState(joystick as i32, &mut gamepad) }) {
+            Some(gamepad.into())
+        } else {
+            None
+        }
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaba1f022c5eb07dfac421df34cdcd31dd
+    pub fn set_clipboard_string(&self, string: &str) -> Result<()> {
+        let cstr = CString::new(string).unwrap();
+        unsafe { ffi::glfwSetClipboardString(ptr::null_mut(), cstr.as_ptr()) };
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga5aba1d704d9ab539282b1fbe9f18bb94
+    pub fn get_clipboard_string(&self) -> Result<String> {
+        let ptr = unsafe { ffi::glfwGetClipboardString(ptr::null_mut()) };
+        get_error().map(|_| unsafe {
+            assert!(!ptr.is_null());
+            CStr::from_ptr(ptr).to_string_lossy().into_owned()
+        })
     }
 }
 
@@ -451,11 +638,43 @@ impl<'a> SharedGlfw<'a> {
     pub unsafe fn get_proc_address(&self, proc_name: &str) -> Result<GlProc> {
         let cstr = CString::new(proc_name).unwrap();
         let proc = ffi::glfwGetProcAddress(cstr.as_ptr());
-        get_error().map(|_| { assert!(!proc.is_null()); proc })
+        get_error().map(|_| {
+            assert!(!proc.is_null());
+            proc
+        })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaa6cf4e7a77158a3b8fd00328b1720a4a
+    pub fn get_time(&self) -> f64 {
+        unsafe { ffi::glfwGetTime() }
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaf59589ef6e8b8c8b5ad184b25afd4dc0
+    pub fn set_time(&self, time: f64) -> Result<()> {
+        unsafe { ffi::glfwSetTime(time) };
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga09b2bd37d328e0b9456c7ec575cc26aa
+    pub fn get_timer_value(&self) -> u64 {
+        unsafe { ffi::glfwGetTimerValue() }
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga3289ee876572f6e91f06df3a24824443
+    pub fn get_timer_frequency(&self) -> u64 {
+        unsafe { ffi::glfwGetTimerFrequency() }
     }
 }
 
-enum ToDo {
+enum ReentranceAvoidanceCommand {
     DestroyWindow(*mut ffi::GLFWwindow),
     DestroyCursor(*mut ffi::GLFWcursor)
 }

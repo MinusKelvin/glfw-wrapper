@@ -56,6 +56,58 @@ pub(crate) mod monitor {
     }
 }
 
+pub use self::joystick::Callback as JoystickCallback;
+pub(crate) mod joystick {
+    use std::panic;
+    use std::process::abort;
+    use libc::c_int;
+    use enum_primitive::FromPrimitive;
+
+    use PROCESSING_EVENTS;
+    use ffi;
+    use Joystick;
+
+    pub trait Callback {
+        fn connected(&mut self, joystick: Joystick);
+        fn disconnected(&mut self, joystick: Joystick);
+    }
+
+    static mut CALLBACK: Option<Box<Callback>> = None;
+
+    pub(crate) fn set(cb: Box<Callback>) {
+        unsafe {
+            ffi::glfwSetJoystickCallback(Some(callback));
+            CALLBACK = Some(cb);
+        }
+    }
+
+    pub(crate) fn unset() {
+        unsafe {
+            CALLBACK = None;
+            ffi::glfwSetJoystickCallback(None);
+        }
+    }
+
+    extern "C" fn callback(joystick: c_int, event: c_int) {
+        if let Err(_) = panic::catch_unwind(|| unsafe {
+            PROCESSING_EVENTS.with(|v| v.set(true));
+            match event {
+                ffi::GLFW_CONNECTED => if let Some(ref mut cb) = CALLBACK {
+                    cb.connected(Joystick::from_i32(joystick).unwrap());
+                }
+                ffi::GLFW_DISCONNECTED => if let Some(ref mut cb) = CALLBACK {
+                    cb.disconnected(Joystick::from_i32(joystick).unwrap());
+                }
+                _ => unreachable!()
+            }
+            PROCESSING_EVENTS.with(|v| v.set(false));
+        }) {
+            eprintln!("Panic in GLFW monitor callback");
+            abort();
+        }
+    }
+}
+
 macro_rules! window_callback {
     (
         $name:ident
@@ -107,9 +159,16 @@ macro_rules! window_callback {
 
 macro_rules! window_callbacks {
     ($($name:ident: $tname:ident {$(use $s:path;)* args $($v:tt)*})*) => {
-        #[derive(Default)]
         pub struct WindowCallbacks<'a> {
             $(pub(crate) $name: Option<Box<$tname + 'a>>),*
+        }
+
+        impl<'a> WindowCallbacks<'a> {
+            pub fn new() -> Self {
+                WindowCallbacks {
+                    $($name: None),*
+                }
+            }
         }
 
         pub(crate) fn init_callbacks(ptr: *mut ::ffi::GLFWwindow) {
@@ -194,14 +253,14 @@ window_callbacks! {
     mouse_button: MouseButtonCallback {
         use libc::c_int;
         use enum_primitive::FromPrimitive;
+        use cint_to_bool;
         use MouseButton;
-        use Action;
         use Modifiers;
-        args = button: MouseButton, action: Action, mods: Modifiers;
+        args = button: MouseButton, pressed: bool, mods: Modifiers;
         glfw = glfwSetMouseButtonCallback;
         transform = button: c_int, action: c_int, mods: c_int =>
                 MouseButton::from_i32(button).unwrap(),
-                Action::from_i32(action).unwrap(),
+                cint_to_bool(action),
                 Modifiers::from_bits(mods).unwrap();
     }
 
@@ -230,15 +289,15 @@ window_callbacks! {
     key: KeyCallback {
         use libc::c_int;
         use enum_primitive::FromPrimitive;
-        use KeyAction;
+        use Action;
         use Key;
         use KeyCode;
         use Modifiers;
-        args = key: Key, action: KeyAction, mods: Modifiers;
+        args = key: Key, action: Action, mods: Modifiers;
         glfw = glfwSetKeyCallback;
         transform = key: c_int, scancode: c_int, action: c_int, mods: c_int =>
-                KeyCode::from_i32(key).map_or(Key::Unknown(scancode), |c| Key::Known(c, scancode)),
-                KeyAction::from_i32(action).unwrap(),
+                KeyCode::from_i32(key).map_or(Key::Unknown(scancode), |c| Key::Known(c)),
+                Action::from_i32(action).unwrap(),
                 Modifiers::from_bits(mods).unwrap();
     }
 
@@ -248,5 +307,33 @@ window_callbacks! {
         args = char: char;
         glfw = glfwSetCharCallback;
         transform = char: c_uint => from_u32(char).unwrap();
+    }
+
+    char_mods: CharModsCallback {
+        use libc::c_uint;
+        use libc::c_int;
+        use std::char::from_u32;
+        use Modifiers;
+        args = char: char, mods: Modifiers;
+        glfw = glfwSetCharModsCallback;
+        transform = char: c_uint, mods: c_int =>
+                from_u32(char).unwrap(),
+                Modifiers::from_bits(mods).unwrap();
+    }
+
+    file_drop: FileDropCallback {
+        use libc::c_int;
+        use libc::c_char;
+        use std::slice;
+        use std::path::PathBuf;
+        use std::ffi::CStr;
+        args = paths: Vec<PathBuf>;
+        glfw = glfwSetDropCallback;
+        transform = count: c_int, paths: *const *const c_char => {
+            let s = slice::from_raw_parts(paths, count as usize);
+            s.iter().map(|p|
+                    PathBuf::from(CStr::from_ptr(*p).to_string_lossy().into_owned())
+            ).collect()
+        };
     }
 }

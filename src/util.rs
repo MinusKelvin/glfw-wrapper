@@ -1,5 +1,5 @@
 use std::ptr;
-use libc::c_int;
+use libc::{ c_int, c_uchar };
 use ffi;
 
 pub(crate) fn bool_to_cint(b: bool) -> c_int {
@@ -11,6 +11,10 @@ pub(crate) fn bool_to_cint(b: bool) -> c_int {
 }
 
 pub(crate) fn cint_to_bool(b: c_int) -> bool {
+    b != 0
+}
+
+pub(crate) fn cuchar_to_bool(b: c_uchar) -> bool {
     b != 0
 }
 

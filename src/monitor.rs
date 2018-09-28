@@ -87,6 +87,14 @@ impl Monitor {
         self.0.get().unwrap_or_else(|| panic!("Monitor outlived its unenforcable lifetime"))
     }
 
+    pub fn is_valid(&self) -> bool {
+        self.0.get().is_some()
+    }
+
+    pub fn is_same_as(&self, other: &Monitor) -> bool {
+        self.0.get().and_then(|p1| other.0.get().map(|p2| p1 == p2)).unwrap_or(false)
+    }
+
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#ga102f54e7acc9149edbcf0997152df8c9

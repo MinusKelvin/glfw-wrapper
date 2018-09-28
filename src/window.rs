@@ -15,6 +15,12 @@ use ContextCreationApi;
 use ContextRobustness;
 use OpenGlProfile;
 use ClientApi;
+use InputMode;
+use SetInputMode;
+use CursorMode;
+use KeyCode;
+use MouseButton;
+use Cursor;
 use callbacks::*;
 use util::*;
 use get_error;
@@ -56,9 +62,9 @@ impl<'a> Window<'a> {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gadd7ccd39fe7a7d1f0904666ae5932dc5
     pub fn set_icon(&self, icons: &[Image]) -> Result<()> {
-        unimplemented!()
-        // unsafe { ffi::glfwSetWindowIcon(...) };
-        // get_error()
+        let icons: Vec<_> = icons.iter().map(|i| i.as_glfw_image()).collect();
+        unsafe { ffi::glfwSetWindowIcon(self.ptr, icons.len() as i32, icons.as_ptr()) };
+        get_error()
     }
 
     /// [GLFW Reference][glfw]
@@ -249,11 +255,8 @@ impl<'a> Window<'a> {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaeac25e64789974ccbe0811766bd91a16
     pub fn get_monitor(&self) -> Option<Monitor> {
-        let ptr = unsafe { ffi::glfwGetWindowMonitor(self.ptr) };
-        if ptr.is_null() {
-            None
-        } else {
-            Some(Monitor::create_from(ptr))
+        unsafe {
+            ffi::glfwGetWindowMonitor(self.ptr).as_mut().map(|p| Monitor::create_from(p))
         }
     }
 
@@ -360,6 +363,79 @@ impl<'a> Window<'a> {
         // Defer to be safe on unwind
         defer!(unsafe { ffi::glfwSetWindowUserPointer(self.ptr, prev) });
         f()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaf5b859dbe19bdf434e42695ea45cc5f4
+    pub fn get_input_mode(&self, mode: InputMode) -> bool {
+        cint_to_bool(unsafe { ffi::glfwGetInputMode(self.ptr, mode as i32) })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaf5b859dbe19bdf434e42695ea45cc5f4
+    pub fn get_cursor_mode(&self) -> CursorMode {
+        CursorMode::from_i32(unsafe { ffi::glfwGetInputMode(self.ptr, ffi::GLFW_CURSOR) }).unwrap()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaa92336e173da9c8834558b54ee80563b
+    pub fn set_input_mode(&self, mode: SetInputMode) -> Result<()> {
+        use SetInputMode::*;
+        unsafe { match mode {
+            Cursor(c) => ffi::glfwSetInputMode(self.ptr, ffi::GLFW_CURSOR, c as i32),
+            StickyKeys(v) => ffi::glfwSetInputMode(
+                self.ptr, ffi::GLFW_STICKY_KEYS, bool_to_cint(v)
+            ),
+            StickyMouseButtons(v) => ffi::glfwSetInputMode(
+                self.ptr, ffi::GLFW_STICKY_MOUSE_BUTTONS, bool_to_cint(v)
+            ),
+            LockKeyMods(v) => ffi::glfwSetInputMode(
+                self.ptr, ffi::GLFW_LOCK_KEY_MODS, bool_to_cint(v)
+            )
+        } }
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gadd341da06bc8d418b4dc3a3518af9ad2
+    pub fn get_key(&self, keycode: KeyCode) -> bool {
+        cint_to_bool(unsafe { ffi::glfwGetKey(self.ptr, keycode as i32) })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gac1473feacb5996c01a7a5a33b5066704
+    pub fn get_mouse_button(&self, button: MouseButton) -> bool {
+        cint_to_bool(unsafe { ffi::glfwGetMouseButton(self.ptr, button as i32) })
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga01d37b6c40133676b9cea60ca1d7c0cc
+    pub fn get_cursor_pos(&self) -> (f64, f64) {
+        let mut p = (0.0, 0.0);
+        unsafe { ffi::glfwGetCursorPos(self.ptr, &mut p.0, &mut p.1) };
+        p
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga04b03af936d906ca123c8f4ee08b39e7
+    pub fn set_cursor_pos(&self, x: f64, y: f64) -> Result<()> {
+        unsafe { ffi::glfwSetCursorPos(self.ptr, x, y) };
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gad3b4f38c8d5dae036bc8fa959e18343e
+    pub fn set_cursor(&self, cursor: Option<&Cursor>) -> Result<()> {
+        unsafe { ffi::glfwSetCursor(self.ptr, cursor.map_or(ptr::null_mut(), |c| c.ptr)) };
+        get_error()
     }
 }
 

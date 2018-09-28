@@ -144,7 +144,7 @@ pub const GLFW_KEY_RIGHT_ALT: c_int = 346;
 pub const GLFW_KEY_RIGHT_SUPER: c_int = 347;
 pub const GLFW_KEY_MENU: c_int = 348;
 
-pub const GLFW_KEY_LAST: c_int = GLFW_KEY_MENU;
+#[allow(unused)] pub const GLFW_KEY_LAST: c_int = GLFW_KEY_MENU;
 
 pub const GLFW_MOD_SHIFT: c_int = 0x0001;
 pub const GLFW_MOD_CONTROL: c_int = 0x0002;
@@ -161,7 +161,7 @@ pub const GLFW_MOUSE_BUTTON_5: c_int = 4;
 pub const GLFW_MOUSE_BUTTON_6: c_int = 5;
 pub const GLFW_MOUSE_BUTTON_7: c_int = 6;
 pub const GLFW_MOUSE_BUTTON_8: c_int = 7;
-pub const GLFW_MOUSE_BUTTON_LAST: c_int = GLFW_MOUSE_BUTTON_8;
+#[allow(unused)] pub const GLFW_MOUSE_BUTTON_LAST: c_int = GLFW_MOUSE_BUTTON_8;
 pub const GLFW_MOUSE_BUTTON_LEFT: c_int = GLFW_MOUSE_BUTTON_1;
 pub const GLFW_MOUSE_BUTTON_RIGHT: c_int = GLFW_MOUSE_BUTTON_2;
 pub const GLFW_MOUSE_BUTTON_MIDDLE: c_int = GLFW_MOUSE_BUTTON_3;
@@ -182,7 +182,7 @@ pub const GLFW_JOYSTICK_13: c_int = 12;
 pub const GLFW_JOYSTICK_14: c_int = 13;
 pub const GLFW_JOYSTICK_15: c_int = 14;
 pub const GLFW_JOYSTICK_16: c_int = 15;
-pub const GLFW_JOYSTICK_LAST: c_int = GLFW_JOYSTICK_16;
+#[allow(unused)] pub const GLFW_JOYSTICK_LAST: c_int = GLFW_JOYSTICK_16;
 
 pub const GLFW_GAMEPAD_BUTTON_A: c_int = 0;
 pub const GLFW_GAMEPAD_BUTTON_B: c_int = 1;
@@ -199,12 +199,13 @@ pub const GLFW_GAMEPAD_BUTTON_DPAD_UP: c_int = 11;
 pub const GLFW_GAMEPAD_BUTTON_DPAD_RIGHT: c_int = 12;
 pub const GLFW_GAMEPAD_BUTTON_DPAD_DOWN: c_int = 13;
 pub const GLFW_GAMEPAD_BUTTON_DPAD_LEFT: c_int = 14;
-pub const GLFW_GAMEPAD_BUTTON_LAST: c_int = GLFW_GAMEPAD_BUTTON_DPAD_LEFT;
+#[allow(unused)] pub const GLFW_GAMEPAD_BUTTON_LAST: c_int = GLFW_GAMEPAD_BUTTON_DPAD_LEFT;
 
-pub const GLFW_GAMEPAD_BUTTON_CROSS: c_int = GLFW_GAMEPAD_BUTTON_A;
-pub const GLFW_GAMEPAD_BUTTON_CIRCLE: c_int = GLFW_GAMEPAD_BUTTON_B;
-pub const GLFW_GAMEPAD_BUTTON_SQUARE: c_int = GLFW_GAMEPAD_BUTTON_X;
-pub const GLFW_GAMEPAD_BUTTON_TRIANGLE: c_int = GLFW_GAMEPAD_BUTTON_Y;
+// Unused aliases
+#[allow(unused)] pub const GLFW_GAMEPAD_BUTTON_CROSS: c_int = GLFW_GAMEPAD_BUTTON_A;
+#[allow(unused)] pub const GLFW_GAMEPAD_BUTTON_CIRCLE: c_int = GLFW_GAMEPAD_BUTTON_B;
+#[allow(unused)] pub const GLFW_GAMEPAD_BUTTON_SQUARE: c_int = GLFW_GAMEPAD_BUTTON_X;
+#[allow(unused)] pub const GLFW_GAMEPAD_BUTTON_TRIANGLE: c_int = GLFW_GAMEPAD_BUTTON_Y;
 
 pub const GLFW_GAMEPAD_AXIS_LEFT_X: c_int = 0;
 pub const GLFW_GAMEPAD_AXIS_LEFT_Y: c_int = 1;
@@ -212,7 +213,7 @@ pub const GLFW_GAMEPAD_AXIS_RIGHT_X: c_int = 2;
 pub const GLFW_GAMEPAD_AXIS_RIGHT_Y: c_int = 3;
 pub const GLFW_GAMEPAD_AXIS_LEFT_TRIGGER: c_int = 4;
 pub const GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER: c_int = 5;
-pub const GLFW_GAMEPAD_AXIS_LAST: c_int = GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER;
+#[allow(unused)] pub const GLFW_GAMEPAD_AXIS_LAST: c_int = GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER;
 
 pub const GLFW_NO_ERROR: c_int = 0;
 pub const GLFW_NOT_INITIALIZED: c_int = 0x00010001;
@@ -237,7 +238,8 @@ pub const GLFW_MAXIMIZED: c_int = 0x00020008;
 pub const GLFW_CENTER_CURSOR: c_int = 0x00020009;
 pub const GLFW_TRANSPARENT_FRAMEBUFFER: c_int = 0x0002000A;
 pub const GLFW_HOVERED: c_int = 0x0002000B;
-pub const GLFW_FOCUS_ON_SHOW: c_int = 0x0002000C;
+// Not present in documentation (but in glfw3.h); see enums.rs WindowHint<'a> for more info
+#[allow(unused)] pub const GLFW_FOCUS_ON_SHOW: c_int = 0x0002000C;
 
 pub const GLFW_RED_BITS: c_int = 0x00021001;
 pub const GLFW_GREEN_BITS: c_int = 0x00021002;
@@ -350,7 +352,7 @@ pub enum GLFWwindow {}
 pub enum GLFWcursor {}
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GLFWvidmode {
     pub width: c_int,
     pub height: c_int,
@@ -372,10 +374,11 @@ pub struct GLFWgammaramp {
 pub struct GLFWimage {
     pub(crate) width: c_int,
     pub(crate) height: c_int,
-    pub(crate) pixels: *mut c_uchar
+    pub(crate) pixels: *const c_uchar
 }
 
 #[repr(C)]
+#[derive(Default)]
 pub struct GLFWgamepadstate {
     pub(crate) buttons: [c_uchar; 15],
     pub(crate) axes: [c_float; 6]
@@ -396,8 +399,9 @@ extern "C" {
     pub fn glfwGetMonitorPhysicalSize(monitor: *mut GLFWmonitor, widthMM: *mut c_int, heightMM: *mut c_int);
     pub fn glfwGetMonitorContentScale(monitor: *mut GLFWmonitor, xscale: *mut c_float, yscale: *mut c_float);
     pub fn glfwGetMonitorName(monitor: *mut GLFWmonitor) -> *const c_char;
-    pub fn glfwSetMonitorUserPointer(monitor: *mut GLFWmonitor, pointer: *mut c_void);
-    pub fn glfwGetMonitorUserPointer(monitor: *mut GLFWmonitor) -> *mut c_void;
+    // We don't expose monitor user pointers
+    #[allow(unused)] pub fn glfwSetMonitorUserPointer(monitor: *mut GLFWmonitor, pointer: *mut c_void);
+    #[allow(unused)] pub fn glfwGetMonitorUserPointer(monitor: *mut GLFWmonitor) -> *mut c_void;
     pub fn glfwSetMonitorCallback(cbfun: Option<GLFWmonitorfun>) -> Option<GLFWmonitorfun>;
     pub fn glfwGetVideoModes(monitor: *mut GLFWmonitor, count: *mut c_int) -> *const GLFWvidmode;
     pub fn glfwGetVideoMode(monitor: *mut GLFWmonitor) -> *const GLFWvidmode;
@@ -476,21 +480,24 @@ extern "C" {
     pub fn glfwGetJoystickHats(jid: c_int, count: *mut c_int) -> *const c_uchar;
     pub fn glfwGetJoystickName(jid: c_int) -> *const c_char;
     pub fn glfwGetJoystickGUID(jid: c_int) -> *const c_char;
-    pub fn glfwSetJoystickUserPointer(jid: c_int, pointer: *mut c_void);
-    pub fn glfwGetJoystickUserPointer(jid: c_int) -> *mut c_void;
+    // We don't expose joystick user pointers
+    #[allow(unused)] pub fn glfwSetJoystickUserPointer(jid: c_int, pointer: *mut c_void);
+    #[allow(unused)] pub fn glfwGetJoystickUserPointer(jid: c_int) -> *mut c_void;
     pub fn glfwJoystickIsGamepad(jid: c_int) -> c_int;
     pub fn glfwSetJoystickCallback(cbfun: Option<GLFWjoystickfun>) -> Option<GLFWjoystickfun>;
-    pub fn glfwUpdateGamepadMappings(string: *mut c_char) -> c_int;
+    pub fn glfwUpdateGamepadMappings(string: *const c_char) -> c_int;
     pub fn glfwGetGamepadName(jid: c_int) -> *const c_char;
     pub fn glfwGetGamepadState(jid: c_int, state: *mut GLFWgamepadstate) -> c_int;
-    pub fn glfwSetClipboardString(window: *mut GLFWwindow, string: *mut c_char);
+    pub fn glfwSetClipboardString(window: *mut GLFWwindow, string: *const c_char);
     pub fn glfwGetClipboardString(window: *mut GLFWwindow) -> *const c_char;
     pub fn glfwGetTime() -> c_double;
     pub fn glfwSetTime(time: c_double);
     pub fn glfwGetTimerValue() -> uint64_t;
     pub fn glfwGetTimerFrequency() -> uint64_t;
     pub fn glfwMakeContextCurrent(window: *mut GLFWwindow);
-    pub fn glfwGetCurrentContext() -> *mut GLFWwindow;
+    // We don't expose this function for now; don't know how to get it to fit in the API. It would
+    // have to return a SharedWindow, but we can't restrict its lifetime to the window it references
+    #[allow(unused)] pub fn glfwGetCurrentContext() -> *mut GLFWwindow;
     pub fn glfwSwapBuffers(window: *mut GLFWwindow);
     pub fn glfwSwapInterval(interval: c_int);
     pub fn glfwExtensionSupported(extension: *const c_char) -> c_int;

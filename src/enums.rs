@@ -1,22 +1,13 @@
-use libc::c_int;
+use libc::{ c_int, c_uchar };
 use ffi;
-
-enum_from_primitive! {
-    #[repr(i32)]
-    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum KeyAction {
-        Release = ffi::GLFW_RELEASE,
-        Press = ffi::GLFW_PRESS,
-        Repeat = ffi::GLFW_REPEAT
-    }
-}
 
 enum_from_primitive! {
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub enum Action {
         Release = ffi::GLFW_RELEASE,
-        Press = ffi::GLFW_PRESS
+        Press = ffi::GLFW_PRESS,
+        Repeat = ffi::GLFW_REPEAT
     }
 }
 
@@ -150,8 +141,18 @@ enum_from_primitive! {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Key {
-    Known(KeyCode, i32),
+    Known(KeyCode),
     Unknown(i32)
+}
+
+enum_from_primitive! {
+    #[repr(i32)]
+    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+    pub enum CursorMode {
+        Normal = ffi::GLFW_CURSOR_NORMAL,
+        Hidden = ffi::GLFW_CURSOR_HIDDEN,
+        Disabled = ffi::GLFW_CURSOR_DISABLED
+    }
 }
 
 enum_from_primitive! {
@@ -195,41 +196,6 @@ enum_from_primitive! {
 enum_from_primitive! {
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum GamepadButton {
-        A = ffi::GLFW_GAMEPAD_BUTTON_A,
-        B = ffi::GLFW_GAMEPAD_BUTTON_B,
-        X = ffi::GLFW_GAMEPAD_BUTTON_X,
-        Y = ffi::GLFW_GAMEPAD_BUTTON_Y,
-        LeftBumper = ffi::GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,
-        RightBumper = ffi::GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER,
-        Back = ffi::GLFW_GAMEPAD_BUTTON_BACK,
-        Start = ffi::GLFW_GAMEPAD_BUTTON_START,
-        Guide = ffi::GLFW_GAMEPAD_BUTTON_GUIDE,
-        LeftThumb = ffi::GLFW_GAMEPAD_BUTTON_LEFT_THUMB,
-        RightThumb = ffi::GLFW_GAMEPAD_BUTTON_RIGHT_THUMB,
-        DPadUp = ffi::GLFW_GAMEPAD_BUTTON_DPAD_UP,
-        DPadRight = ffi::GLFW_GAMEPAD_BUTTON_DPAD_RIGHT,
-        DPadDown = ffi::GLFW_GAMEPAD_BUTTON_DPAD_DOWN,
-        DPadLeft = ffi::GLFW_GAMEPAD_BUTTON_DPAD_LEFT,
-    }
-}
-
-enum_from_primitive! {
-    #[repr(i32)]
-    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum GamepadAxis {
-        LeftX = ffi::GLFW_GAMEPAD_AXIS_LEFT_X,
-        LeftY = ffi::GLFW_GAMEPAD_AXIS_LEFT_Y,
-        RightX = ffi::GLFW_GAMEPAD_AXIS_RIGHT_X,
-        RightY = ffi::GLFW_GAMEPAD_AXIS_RIGHT_Y,
-        LeftTrigger = ffi::GLFW_GAMEPAD_AXIS_LEFT_TRIGGER,
-        RightTrigger = ffi::GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER,
-    }
-}
-
-enum_from_primitive! {
-    #[repr(i32)]
-    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub enum ErrorKind {
         NoCurrentContext = ffi::GLFW_NO_CURRENT_CONTEXT,
         InvalidValue = ffi::GLFW_INVALID_VALUE,
@@ -245,7 +211,7 @@ enum_from_primitive! {
 enum_from_primitive! {
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum StandardCursor {
+    pub enum StandardCursorShape {
         Arrow = ffi::GLFW_ARROW_CURSOR,
         IBeam = ffi::GLFW_IBEAM_CURSOR,
         Crosshair = ffi::GLFW_CROSSHAIR_CURSOR,
@@ -338,15 +304,14 @@ pub enum WindowHint<'a> {
     ContextCreationApi(ContextCreationApi),
     ContextVersionMajor(i32),
     ContextVersionMinor(i32),
-    // Missing from http://www.glfw.org/docs/3.3/window_guide.html#window_hints_values
-    // ContextRevision(i32),
     ContextRobustness(ContextRobustness),
     ContextReleaseBehavior(ContextReleaseBehavior),
     OpenGlForwardCompat(bool),
     OpenGlDebugContext(bool),
     OpenGlProfile(OpenGlProfile),
     // Missing from http://www.glfw.org/docs/3.3/window_guide.html#window_hints_values
-    // ContextNoError(bool),
+    // but present elsewhere in the documentation, so we will expose it
+    ContextNoError(bool),
     CocoaRetinaFramebuffer(bool),
     CocoaFrameName(&'a str),
     CocoaGraphicsSwitching(bool),
@@ -397,4 +362,38 @@ bitflags! {
         const CapsLock = ffi::GLFW_MOD_CAPS_LOCK;
         const NumLock = ffi::GLFW_MOD_NUM_LOCK;
     }
+}
+
+bitflags! {
+    pub struct JoystickHat: c_uchar {
+        const Centered = ffi::GLFW_HAT_CENTERED as u8;
+
+        const Up = ffi::GLFW_HAT_UP as u8;
+        const Right = ffi::GLFW_HAT_RIGHT as u8;
+        const Down = ffi::GLFW_HAT_DOWN as u8;
+        const Left = ffi::GLFW_HAT_LEFT as u8;
+
+        const RightUp =   ffi::GLFW_HAT_RIGHT_UP as u8;
+        const RightDown = ffi::GLFW_HAT_RIGHT_DOWN as u8;
+        const LeftUp =    ffi::GLFW_HAT_LEFT_UP as u8;
+        const LeftDown =  ffi::GLFW_HAT_LEFT_DOWN as u8;
+    }
+}
+
+enum_from_primitive! {
+    #[repr(i32)]
+    #[derive(Copy, Clone, Hash, Debug)]
+    pub enum InputMode {
+        StickyKeys = ffi::GLFW_STICKY_KEYS,
+        StickyMouseButtons = ffi::GLFW_STICKY_MOUSE_BUTTONS,
+        LockKeyMods = ffi::GLFW_LOCK_KEY_MODS
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum SetInputMode {
+    Cursor(CursorMode),
+    StickyKeys(bool),
+    StickyMouseButtons(bool),
+    LockKeyMods(bool)
 }
