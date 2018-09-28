@@ -583,6 +583,69 @@ impl Glfw {
             CStr::from_ptr(ptr).to_string_lossy().into_owned()
         })
     }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab5997a25187e9fd5c6f2ecbbc8dfd7e9
+    pub fn post_empty_event(&self) -> Result<()> {
+        self.shared().post_empty_event()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga1c04dc242268f827290fe40aa1c91157
+    pub unsafe fn clear_current_context(&self) -> Result<()> {
+        self.shared().clear_current_context()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga6d4e0cdf151b5e579bd67f13202994ed
+    pub unsafe fn swap_interval(&self, interval: i32) -> Result<()> {
+        self.shared().swap_interval(interval)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga87425065c011cef1ebd6aac75e059dfa
+    pub unsafe fn extension_supported(&self, extension: &str) -> Result<bool> {
+        self.shared().extension_supported(extension)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga35f1837e6f666781842483937612f163
+    pub unsafe fn get_proc_address(&self, proc_name: &str) -> Result<GlProc> {
+        self.shared().get_proc_address(proc_name)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaa6cf4e7a77158a3b8fd00328b1720a4a
+    pub fn get_time(&self) -> f64 {
+        self.shared().get_time()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaf59589ef6e8b8c8b5ad184b25afd4dc0
+    pub fn set_time(&self, time: f64) -> Result<()> {
+        self.shared().set_time(time)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga09b2bd37d328e0b9456c7ec575cc26aa
+    pub fn get_timer_value(&self) -> u64 {
+        self.shared().get_timer_value()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga3289ee876572f6e91f06df3a24824443
+    pub fn get_timer_frequency(&self) -> u64 {
+        self.shared().get_timer_frequency()
+    }
 }
 
 /// Encapsulates GLFW library calls that can be called from any thread.

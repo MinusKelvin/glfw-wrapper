@@ -437,6 +437,36 @@ impl<'a> Window<'a> {
         unsafe { ffi::glfwSetCursor(self.ptr, cursor.map_or(ptr::null_mut(), |c| c.ptr)) };
         get_error()
     }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga24e02fbfefbb81fc45320989f8140ab5
+    pub fn should_close(&self) -> bool {
+        self.shared().should_close()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga49c449dde2a6f87d996f4daaa09d6708
+    pub fn set_should_close(&self, v: bool) {
+        self.shared().set_should_close(v)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// The EGL API requires that the context for the window be current.
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga15a5a1ee5b3c2ca6b15ca209a12efd14
+    pub fn swap_buffers(&self) -> Result<()> {
+        self.shared().swap_buffers()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga1c04dc242268f827290fe40aa1c91157
+    pub unsafe fn make_context_current(&self) -> Result<()> {
+        self.shared().make_context_current()
+    }
 }
 
 pub struct SharedWindow<'a: 'b, 'b>(&'b Window<'a>);
