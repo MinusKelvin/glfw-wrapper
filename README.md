@@ -10,3 +10,5 @@ A safe and thin wrapper around the [GLFW] window and context creation library.
 - Readme
 
 All other functionality should be exposed.
+
+[GLFW]: http://www.glfw.org
