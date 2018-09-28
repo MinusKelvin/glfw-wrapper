@@ -117,18 +117,19 @@ macro_rules! window_callback {
     ) => {
         use std::panic;
         use std::process::abort;
+        use libc::c_void;
 
         use ffi;
         use PROCESSING_EVENTS;
         use callbacks::WindowCallbacks;
 
-        pub trait Callback {
-            fn callback(&mut self, $($arg_n: $arg_t),*);
+        pub trait Callback<U> {
+            fn callback(&mut self, userdata: &mut U, $($arg_n: $arg_t),*);
         }
 
-        impl<F> Callback for F where F: FnMut($($arg_t),*) {
-            fn callback(&mut self, $($arg_n: $arg_t),*) {
-                self($($arg_n),*)
+        impl<F, U> Callback<U> for F where F: FnMut(&mut U, $($arg_t),*) {
+            fn callback(&mut self, userdata: &mut U, $($arg_n: $arg_t),*) {
+                self(userdata, $($arg_n),*)
             }
         }
 
@@ -141,11 +142,12 @@ macro_rules! window_callback {
         extern "C" fn callback(ptr: *mut ffi::GLFWwindow, $($glfw_n: $glfw_t),*) {
             if let Err(_) = panic::catch_unwind(|| unsafe {
                 PROCESSING_EVENTS.with(|v| v.set(true));
-                let callbacks = ffi::glfwGetWindowUserPointer(ptr) as *mut WindowCallbacks;
+                let callbacks = ffi::glfwGetWindowUserPointer(ptr) as
+                        *mut (&mut WindowCallbacks<c_void>, &mut c_void);
                 if !callbacks.is_null() {
                     let callbacks = &mut *callbacks;
-                    if let Some(ref mut cb) = callbacks.$name {
-                        cb.callback($($transform),*);
+                    if let Some(ref mut cb) = callbacks.0 .$name {
+                        cb.callback(callbacks.1, $($transform),*);
                     }
                 }
                 PROCESSING_EVENTS.with(|v| v.set(false));
@@ -159,11 +161,11 @@ macro_rules! window_callback {
 
 macro_rules! window_callbacks {
     ($($name:ident: $tname:ident {$(use $s:path;)* args $($v:tt)*})*) => {
-        pub struct WindowCallbacks<'a> {
-            $(pub $name: Option<Box<$tname + 'a>>),*
+        pub struct WindowCallbacks<'a, U> {
+            $(pub $name: Option<Box<$tname<U> + 'a>>),*
         }
 
-        impl<'a> WindowCallbacks<'a> {
+        impl<'a, U> WindowCallbacks<'a, U> {
             pub fn new() -> Self {
                 WindowCallbacks {
                     $($name: None),*

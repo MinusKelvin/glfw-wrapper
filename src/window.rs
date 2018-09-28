@@ -355,11 +355,17 @@ impl<'a> Window<'a> {
     }
 
     /// This function stands in for all of the `glfwSet*Callback` functions.
-    pub fn with_callbacks<'b, F, T>(&self, callbacks: &mut WindowCallbacks<'b>, f: F) -> T
+    pub fn with_callbacks<'b, F, T, U>(
+        &self,
+        callbacks: &mut WindowCallbacks<'b, U>,
+        userdata: &mut U,
+        f: F
+    ) -> T
     where F: FnOnce() -> T {
         let prev = unsafe { ffi::glfwGetWindowUserPointer(self.ptr) };
+        let mut user = (callbacks, userdata);
         unsafe { ffi::glfwSetWindowUserPointer(self.ptr,
-                callbacks as *mut WindowCallbacks<'b> as *mut c_void) };
+                &mut user as *mut (&mut WindowCallbacks<'b, U>, &mut U) as *mut c_void) };
         // Defer to be safe on unwind
         defer!(unsafe { ffi::glfwSetWindowUserPointer(self.ptr, prev) });
         f()
