@@ -160,7 +160,7 @@ macro_rules! window_callback {
 macro_rules! window_callbacks {
     ($($name:ident: $tname:ident {$(use $s:path;)* args $($v:tt)*})*) => {
         pub struct WindowCallbacks<'a> {
-            $(pub(crate) $name: Option<Box<$tname + 'a>>),*
+            $(pub $name: Option<Box<$tname + 'a>>),*
         }
 
         impl<'a> WindowCallbacks<'a> {
