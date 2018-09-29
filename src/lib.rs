@@ -694,10 +694,7 @@ impl<'a> SharedGlfw<'a> {
     pub unsafe fn get_proc_address(&self, proc_name: &str) -> Result<GlProc> {
         let cstr = CString::new(proc_name).unwrap();
         let proc = ffi::glfwGetProcAddress(cstr.as_ptr());
-        get_error().map(|_| {
-            assert!(!proc.is_null());
-            proc
-        })
+        get_error().map(|_| proc)
     }
 
     /// [GLFW Reference][glfw]

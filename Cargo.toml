@@ -1,6 +1,6 @@
 [package]
 name = "glfw-wrapper"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["MinusKelvin <me@minuskelvin.net>"]
 description = "A safe and thin wrapper around the [GLFW] window and context creation library."
 repository = "https://github.com/MinusKelvin/glfw-wrapper.git"
