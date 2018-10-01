@@ -123,6 +123,18 @@ macro_rules! window_callback {
         use PROCESSING_EVENTS;
         use callbacks::WindowCallbacks;
 
+        pub struct Owner<'a, U>(pub Option<Box<Callback<U> + 'a>>);
+
+        impl<'a, U> Owner<'a, U> {
+            pub fn set<F: Callback<U> + 'a>(&mut self, callback: F) {
+                self.0 = Some(Box::new(callback));
+            }
+
+            pub fn unset(&mut self) {
+                self.0 = None;
+            }
+        }
+
         pub trait Callback<U> {
             fn callback(&mut self, userdata: &mut U, $($arg_n: $arg_t),*);
         }
@@ -146,7 +158,7 @@ macro_rules! window_callback {
                         *mut (&mut WindowCallbacks<c_void>, &mut c_void);
                 if !callbacks.is_null() {
                     let callbacks = &mut *callbacks;
-                    if let Some(ref mut cb) = callbacks.0 .$name {
+                    if let Some(ref mut cb) = callbacks.0 .$name.0 {
                         cb.callback(callbacks.1, $($transform),*);
                     }
                 }
@@ -162,13 +174,13 @@ macro_rules! window_callback {
 macro_rules! window_callbacks {
     ($($name:ident: $tname:ident {$(use $s:path;)* args $($v:tt)*})*) => {
         pub struct WindowCallbacks<'a, U> {
-            $(pub $name: Option<Box<$tname<U> + 'a>>),*
+            $(pub $name: $name::Owner<'a, U>),*
         }
 
         impl<'a, U> WindowCallbacks<'a, U> {
             pub fn new() -> Self {
                 WindowCallbacks {
-                    $($name: None),*
+                    $($name: $name::Owner(None)),*
                 }
             }
         }
