@@ -271,6 +271,21 @@ enum_from_primitive! {
     }
 }
 
+enum_from_primitive! {
+    #[repr(i32)]
+    #[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
+    pub enum WindowBorder {
+        Left = ffi::GLFW_WINDOW_LEFT,
+        Top = ffi::GLFW_WINDOW_TOP,
+        Right = ffi::GLFW_WINDOW_RIGHT,
+        Bottom = ffi::GLFW_WINDOW_BOTTOM,
+        TopLeft = ffi::GLFW_WINDOW_TOPLEFT,
+        TopRight = ffi::GLFW_WINDOW_TOPRIGHT,
+        BottomLeft = ffi::GLFW_WINDOW_BOTTOMLEFT,
+        BottomRight = ffi::GLFW_WINDOW_BOTTOMRIGHT
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum WindowHint<'a> {
     Resizable(bool),

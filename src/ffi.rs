@@ -306,6 +306,15 @@ pub const GLFW_NATIVE_CONTEXT_API: c_int = 0x00036001;
 pub const GLFW_EGL_CONTEXT_API: c_int = 0x00036002;
 pub const GLFW_OSMESA_CONTEXT_API: c_int = 0x00036003;
 
+pub const GLFW_WINDOW_LEFT: c_int = 0;
+pub const GLFW_WINDOW_TOP: c_int = 1;
+pub const GLFW_WINDOW_RIGHT: c_int = 2;
+pub const GLFW_WINDOW_BOTTOM: c_int = 3;
+pub const GLFW_WINDOW_TOPLEFT: c_int = 4;
+pub const GLFW_WINDOW_TOPRIGHT: c_int = 5;
+pub const GLFW_WINDOW_BOTTOMLEFT: c_int = 6;
+pub const GLFW_WINDOW_BOTTOMRIGHT: c_int = 7;
+
 pub const GLFW_ARROW_CURSOR: c_int = 0x00036001;
 pub const GLFW_IBEAM_CURSOR: c_int = 0x00036002;
 pub const GLFW_CROSSHAIR_CURSOR: c_int = 0x00036003;
@@ -434,6 +443,8 @@ extern "C" {
     pub fn glfwShowWindow(window: *mut GLFWwindow);
     pub fn glfwHideWindow(window: *mut GLFWwindow);
     pub fn glfwFocusWindow(window: *mut GLFWwindow);
+    pub fn glfwResizeWindow(window: *mut GLFWwindow, border: c_int);
+    pub fn glfwDragWindow(window: *mut GLFWwindow);
     pub fn glfwRequestWindowAttention(window: *mut GLFWwindow);
     pub fn glfwGetWindowMonitor(window: *mut GLFWwindow) -> *mut GLFWmonitor;
     pub fn glfwSetWindowMonitor(window: *mut GLFWwindow, monitor: *mut GLFWmonitor, xpos: c_int, ypos: c_int, width: c_int, height: c_int, refreshRate: c_int);

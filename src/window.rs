@@ -15,6 +15,7 @@ use ContextCreationApi;
 use ContextRobustness;
 use OpenGlProfile;
 use ClientApi;
+use WindowBorder;
 use InputMode;
 use SetInputMode;
 use CursorMode;
@@ -240,6 +241,16 @@ impl<'a> Window<'a> {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga873780357abd3f3a081d71a40aae45a1
     pub fn focus(&self) -> Result<()> {
         unsafe { ffi::glfwFocusWindow(self.ptr) };
+        get_error()
+    }
+
+    pub fn resize(&self, border: WindowBorder) -> Result<()> {
+        unsafe { ffi::glfwResizeWindow(self.ptr, border as i32) };
+        get_error()
+    }
+
+    pub fn drag(&self) -> Result<()> {
+        unsafe { ffi::glfwDragWindow(self.ptr) };
         get_error()
     }
 
