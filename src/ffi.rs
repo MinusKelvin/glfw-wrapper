@@ -527,3 +527,73 @@ extern {}
 #[link(name = "CoreFoundation", kind = "framework")]
 #[link(name = "QuartzCore", kind = "framework")]
 extern {}
+
+#[cfg(all(
+    feature = "expose-win32",
+    target_os = "windows"
+))]
+pub mod win32 {
+    use super::{ GLFWmonitor, GLFWwindow };
+    use libc::c_char;
+    use winapi::shared::HWND;
+
+    extern {
+        pub fn glfwGetWin32Adapter(monitor: *mut GLFWmonitor) -> *const c_char;
+        pub fn glfwGetWin32Monitor(monitor: *mut GLFWmonitor) -> *const c_char;
+        pub fn glfwGetWin32Window(window: *mut GLFWwindow) -> HWND;
+    }
+}
+
+#[cfg(all(
+    feature = "expose-wgl",
+    target_os = "windows"
+))]
+pub mod wgl {
+    use super::GLFWwindow;
+    use winapi::shared::HGLRC;
+
+    extern {
+        pub fn glfwGetWGLContext(window: *mut GLFWwindow) -> HGLRC;
+    }
+}
+
+// TODO: Expose Cocoa, NSGL
+
+#[cfg(all(
+    feature = "expose-x11",
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))]
+pub mod x11 {
+    use super::{ GLFWmonitor, GLFWwindow };
+    use libc::c_char;
+    use x11::xlib::{ Display, Window };
+    use x11::xrandr::{ RRCrtc, RROutput };
+
+    extern {
+        pub fn glfwGetX11Display() -> *mut Display;
+        pub fn glfwGetX11Adapter(monitor: *mut GLFWmonitor) -> RRCrtc;
+        pub fn glfwGetX11Monitor(monitor: *mut GLFWmonitor) -> RROutput;
+        pub fn glfwGetX11Window(window: *mut GLFWwindow) -> Window;
+        pub fn glfwSetX11SelectionString(string: *const c_char);
+        pub fn glfwGetX11SelectionString() -> *const c_char;
+    }
+}
+
+#[cfg(all(
+    feature = "expose-glx",
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))]
+pub mod glx {
+    use super::GLFWwindow;
+    use x11::glx::{ GLXContext, GLXWindow };
+
+    #[allow(improper_ctypes)]
+    extern {
+        pub fn glfwGetGLXContext(window: *mut GLFWwindow) -> GLXContext;
+        pub fn glfwGetGLXWindow(window: *mut GLFWwindow) -> GLXWindow;
+    }
+}
+
+// TODO: Expose Wayland, Mir
+
+// TODO: Expose EGL, OSMesa

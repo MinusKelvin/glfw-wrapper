@@ -6,6 +6,16 @@ extern crate bitflags;
 extern crate scopeguard;
 extern crate libc;
 
+#[cfg(all(
+    any(feature = "expose-win32", feature = "expose-wgl"),
+    target_os="windows"
+))] extern crate winapi;
+
+#[cfg(all(
+    any(feature = "expose-x11", feature = "expose-glx"),
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))] extern crate x11;
+
 use std::borrow::Cow;
 use std::ffi::{ CStr, CString };
 use std::sync::atomic::{ AtomicBool, ATOMIC_BOOL_INIT, Ordering };
@@ -13,6 +23,7 @@ use std::marker::PhantomData;
 use std::ptr;
 use std::cell::{ RefCell, Cell };
 use std::slice;
+use std::ops::Deref;
 
 use libc::{ c_int, c_char };
 use enum_primitive::FromPrimitive;
@@ -136,6 +147,7 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
             callbacks::monitor::initialize();
             Ok(Some(Glfw {
+                shared: SharedGlfw(PhantomData),
                 _phantom: PhantomData
             }))
         } else {
@@ -154,8 +166,14 @@ thread_local! {
             RefCell::new(Vec::new());
 }
 
+enum ReentranceAvoidanceCommand {
+    DestroyWindow(*mut ffi::GLFWwindow),
+    DestroyCursor(*mut ffi::GLFWcursor)
+}
+
 /// Represents ownership of the GLFW library.
 pub struct Glfw {
+    shared: SharedGlfw,
     _phantom: PhantomData<*const ()>
 }
 
@@ -209,8 +227,8 @@ impl Glfw {
     }
 
     /// Gets a type allowing access to the parts of GLFW accessible from any thread.
-    pub fn shared(&self) -> SharedGlfw {
-        SharedGlfw(PhantomData)
+    pub fn shared(&self) -> &SharedGlfw {
+        &self.shared
     }
 
     /// [GLFW Reference][glfw]
@@ -583,78 +601,21 @@ impl Glfw {
             CStr::from_ptr(ptr).to_string_lossy().into_owned()
         })
     }
+}
 
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab5997a25187e9fd5c6f2ecbbc8dfd7e9
-    pub fn post_empty_event(&self) -> Result<()> {
-        self.shared().post_empty_event()
-    }
+impl Deref for Glfw {
+    type Target = SharedGlfw;
 
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga1c04dc242268f827290fe40aa1c91157
-    pub unsafe fn clear_current_context(&self) -> Result<()> {
-        self.shared().clear_current_context()
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga6d4e0cdf151b5e579bd67f13202994ed
-    pub unsafe fn swap_interval(&self, interval: i32) -> Result<()> {
-        self.shared().swap_interval(interval)
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga87425065c011cef1ebd6aac75e059dfa
-    pub unsafe fn extension_supported(&self, extension: &str) -> Result<bool> {
-        self.shared().extension_supported(extension)
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga35f1837e6f666781842483937612f163
-    pub unsafe fn get_proc_address(&self, proc_name: &str) -> Result<GlProc> {
-        self.shared().get_proc_address(proc_name)
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaa6cf4e7a77158a3b8fd00328b1720a4a
-    pub fn get_time(&self) -> f64 {
-        self.shared().get_time()
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaf59589ef6e8b8c8b5ad184b25afd4dc0
-    pub fn set_time(&self, time: f64) -> Result<()> {
-        self.shared().set_time(time)
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga09b2bd37d328e0b9456c7ec575cc26aa
-    pub fn get_timer_value(&self) -> u64 {
-        self.shared().get_timer_value()
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga3289ee876572f6e91f06df3a24824443
-    pub fn get_timer_frequency(&self) -> u64 {
-        self.shared().get_timer_frequency()
+    fn deref(&self) -> &SharedGlfw {
+        &self.shared
     }
 }
 
 /// Encapsulates GLFW library calls that can be called from any thread.
-#[derive(Copy, Clone)]
-pub struct SharedGlfw<'a>(pub(crate) PhantomData<&'a Glfw>);
-unsafe impl<'a> Send for SharedGlfw<'a> {}
-unsafe impl<'a> Sync for SharedGlfw<'a> {}
+pub struct SharedGlfw(PhantomData<*const ()>);
+unsafe impl Sync for SharedGlfw {}
 
-impl<'a> SharedGlfw<'a> {
+impl SharedGlfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab5997a25187e9fd5c6f2ecbbc8dfd7e9
@@ -727,7 +688,35 @@ impl<'a> SharedGlfw<'a> {
     }
 }
 
-enum ReentranceAvoidanceCommand {
-    DestroyWindow(*mut ffi::GLFWwindow),
-    DestroyCursor(*mut ffi::GLFWcursor)
+#[cfg(all(
+    feature = "expose-x11",
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))]
+impl SharedGlfw {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga8519b66594ea3ef6eeafaa2e3ee37406
+    pub unsafe fn get_x11_display(&self) -> *mut x11::xlib::Display {
+        ffi::x11::glfwGetX11Display()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga55f879ab02d93367f966186b6f0133f7
+    pub unsafe fn set_x11_selection_string(&self, string: &str) -> Result<()> {
+        let string = CString::new(string).unwrap();
+        ffi::x11::glfwSetX11SelectionString(string.as_ptr());
+        get_error()
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga72f23e3980b83788c70aa854eca31430
+    pub unsafe fn get_x11_selection_string(&self) -> Result<String> {
+        let ptr = ffi::x11::glfwGetX11SelectionString();
+        get_error().map(|_| {
+            assert!(!ptr.is_null());
+            CStr::from_ptr(ptr).to_string_lossy().into_owned()
+        })
+    }
 }
