@@ -84,7 +84,7 @@ impl Monitor {
     }
 
     pub(crate) fn get_ptr(&self) -> *mut ffi::GLFWmonitor {
-        self.0.get().unwrap_or_else(|| panic!("Monitor outlived its unenforcable lifetime"))
+        self.0.get().unwrap_or_else(|| panic!("Monitor outlived its lifetime"))
     }
 
     pub fn is_valid(&self) -> bool {
@@ -201,3 +201,53 @@ impl Monitor {
 }
 
 pub struct GammaRamp(pub Vec<(u16, u16, u16)>);
+
+#[cfg(all(
+    feature = "expose-win32",
+    target_os = "windows"
+))]
+impl Monitor {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gac84f63a3f9db145b9435e5e0dbc4183d
+    pub unsafe fn get_win32_adapter(&self) -> Option<String> {
+        let ptr = ffi::win32::glfwGetWin32Adapter(self.get_ptr());
+        if ptr.is_null() {
+            None
+        } else {
+            Some(CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gac408b09a330749402d5d1fa1f5894dd9
+    pub unsafe fn get_win32_monitor(&self) -> Option<String> {
+        let ptr = ffi::win32::glfwGetWin32Monitor(self.get_ptr());
+        if ptr.is_null() {
+            None
+        } else {
+            Some(CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        }
+    }
+}
+
+#[cfg(all(
+    feature = "expose-x11",
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))]
+impl Monitor {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga088fbfa80f50569402b41be71ad66e40
+    pub unsafe fn get_x11_adapter(&self) -> ::x11::xrandr::RRCrtc {
+        ffi::x11::glfwGetX11Adapter(self.get_ptr())
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gab2f8cc043905e9fa9b12bfdbbcfe874c
+    pub unsafe fn get_x11_monitor(&self) -> ::x11::xrandr::RROutput {
+        ffi::x11::glfwGetX11Monitor(self.get_ptr())
+    }
+}

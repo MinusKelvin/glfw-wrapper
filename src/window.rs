@@ -1,5 +1,6 @@
 use std::ffi::CString;
 use std::ptr;
+use std::ops::Deref;
 
 use libc::c_void;
 use enum_primitive::FromPrimitive;
@@ -28,6 +29,7 @@ use get_error;
 
 pub struct Window<'a> {
     pub(crate) ptr: *mut ffi::GLFWwindow,
+    shared: SharedWindow,
     glfw: &'a Glfw
 }
 
@@ -42,12 +44,13 @@ impl<'a> Window<'a> {
         init_callbacks(ptr);
         Window {
             ptr: ptr,
+            shared: SharedWindow(ptr),
             glfw: glfw,
         }
     }
 
-    pub fn shared<'b>(&'b self) -> SharedWindow<'a, 'b> {
-        SharedWindow(self)
+    pub fn shared(&self) -> &SharedWindow {
+        &self.shared
     }
 
     /// [GLFW Reference][glfw]
@@ -454,48 +457,25 @@ impl<'a> Window<'a> {
         unsafe { ffi::glfwSetCursor(self.ptr, cursor.map_or(ptr::null_mut(), |c| c.ptr)) };
         get_error()
     }
+}
 
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga24e02fbfefbb81fc45320989f8140ab5
-    pub fn should_close(&self) -> bool {
-        self.shared().should_close()
-    }
+impl<'a> Deref for Window<'a> {
+    type Target = SharedWindow;
 
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga49c449dde2a6f87d996f4daaa09d6708
-    pub fn set_should_close(&self, v: bool) {
-        self.shared().set_should_close(v)
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// The EGL API requires that the context for the window be current.
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga15a5a1ee5b3c2ca6b15ca209a12efd14
-    pub fn swap_buffers(&self) -> Result<()> {
-        self.shared().swap_buffers()
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga1c04dc242268f827290fe40aa1c91157
-    pub unsafe fn make_context_current(&self) -> Result<()> {
-        self.shared().make_context_current()
+    fn deref(&self) -> &SharedWindow {
+        &self.shared
     }
 }
 
-pub struct SharedWindow<'a: 'b, 'b>(&'b Window<'a>);
-unsafe impl<'a: 'b, 'b> Send for SharedWindow<'a, 'b> {}
-unsafe impl<'a: 'b, 'b> Sync for SharedWindow<'a, 'b> {}
+pub struct SharedWindow(*mut ffi::GLFWwindow);
+unsafe impl Sync for SharedWindow {}
 
-impl<'a: 'b, 'b> SharedWindow<'a, 'b> {
+impl SharedWindow {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga24e02fbfefbb81fc45320989f8140ab5
     pub fn should_close(&self) -> bool {
-        let v = unsafe { ffi::glfwWindowShouldClose(self.0.ptr) };
+        let v = unsafe { ffi::glfwWindowShouldClose(self.0) };
         cint_to_bool(v)
     }
 
@@ -503,7 +483,7 @@ impl<'a: 'b, 'b> SharedWindow<'a, 'b> {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga49c449dde2a6f87d996f4daaa09d6708
     pub fn set_should_close(&self, v: bool) {
-        unsafe { ffi::glfwSetWindowShouldClose(self.0.ptr, bool_to_cint(v)) };
+        unsafe { ffi::glfwSetWindowShouldClose(self.0, bool_to_cint(v)) };
     }
 
     /// [GLFW Reference][glfw]
@@ -512,7 +492,7 @@ impl<'a: 'b, 'b> SharedWindow<'a, 'b> {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga15a5a1ee5b3c2ca6b15ca209a12efd14
     pub fn swap_buffers(&self) -> Result<()> {
-        unsafe { ffi::glfwSwapBuffers(self.0.ptr) };
+        unsafe { ffi::glfwSwapBuffers(self.0) };
         get_error()
     }
 
@@ -520,7 +500,66 @@ impl<'a: 'b, 'b> SharedWindow<'a, 'b> {
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__context.html#ga1c04dc242268f827290fe40aa1c91157
     pub unsafe fn make_context_current(&self) -> Result<()> {
-        ffi::glfwMakeContextCurrent(self.0.ptr);
+        ffi::glfwMakeContextCurrent(self.0);
         get_error()
+    }
+}
+
+#[cfg(all(
+    feature = "expose-win32",
+    target_os = "windows"
+))]
+impl SharedWindow {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gafe5079aa79038b0079fc09d5f0a8e667
+    pub unsafe fn get_win32_window(&self) -> ::winapi::shared::HWND {
+        ffi::win32::glfwGetWin32Window(self.0)
+    }
+}
+
+#[cfg(all(
+    feature = "expose-wgl",
+    target_os = "windows"
+))]
+impl SharedWindow {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gadc4010d91d9cc1134d040eeb1202a143
+    pub unsafe fn get_wgl_context(&self) -> ::winapi::shared::HGLRC {
+        ffi::win32::glfwGetWGLContext(self.0)
+    }
+}
+
+#[cfg(all(
+    feature = "expose-x11",
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))]
+impl SharedWindow {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga90ca676322740842db446999a1b1f21d
+    pub unsafe fn get_x11_window(&self) -> ::x11::xlib::Window {
+        ffi::x11::glfwGetX11Window(self.0)
+    }
+}
+
+#[cfg(all(
+    feature = "expose-glx",
+    any(target_os="linux", target_os="freebsd", target_os="dragonfly")
+))]
+impl SharedWindow {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga90ca676322740842db446999a1b1f21d
+    pub unsafe fn get_glx_context(&self) -> ::x11::glx::GLXContext {
+        ffi::glx::glfwGetGLXContext(self.0)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#ga90ca676322740842db446999a1b1f21d
+    pub unsafe fn get_glx_window(&self) -> ::x11::glx::GLXWindow {
+        ffi::glx::glfwGetGLXWindow(self.0)
     }
 }
