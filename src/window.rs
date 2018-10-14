@@ -502,7 +502,7 @@ impl SharedWindow {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gafe5079aa79038b0079fc09d5f0a8e667
-    pub unsafe fn get_win32_window(&self) -> ::winapi::shared::HWND {
+    pub unsafe fn get_win32_window(&self) -> ::winapi::shared::windef::HWND {
         ffi::win32::glfwGetWin32Window(self.0)
     }
 }
@@ -515,8 +515,8 @@ impl SharedWindow {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__native.html#gadc4010d91d9cc1134d040eeb1202a143
-    pub unsafe fn get_wgl_context(&self) -> ::winapi::shared::HGLRC {
-        ffi::win32::glfwGetWGLContext(self.0)
+    pub unsafe fn get_wgl_context(&self) -> ::winapi::shared::windef::HGLRC {
+        ffi::wgl::glfwGetWGLContext(self.0)
     }
 }
 
