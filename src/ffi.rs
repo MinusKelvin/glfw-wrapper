@@ -546,7 +546,7 @@ extern {}
 pub mod win32 {
     use super::{ GLFWmonitor, GLFWwindow };
     use libc::c_char;
-    use winapi::shared::HWND;
+    use winapi::shared::windef::HWND;
 
     extern {
         pub fn glfwGetWin32Adapter(monitor: *mut GLFWmonitor) -> *const c_char;
@@ -561,7 +561,7 @@ pub mod win32 {
 ))]
 pub mod wgl {
     use super::GLFWwindow;
-    use winapi::shared::HGLRC;
+    use winapi::shared::windef::HGLRC;
 
     extern {
         pub fn glfwGetWGLContext(window: *mut GLFWwindow) -> HGLRC;
