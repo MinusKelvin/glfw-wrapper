@@ -1,6 +1,6 @@
 #![allow(bad_style)]
 
-use libc::{ c_int, c_char, c_float, c_double, c_uint, c_ushort, c_uchar, uint64_t, c_void };
+use std::os::raw::{ c_int, c_char, c_float, c_double, c_uint, c_ushort, c_uchar, c_void };
 
 pub const GLFW_VERSION_MAJOR: c_int = 3;
 pub const GLFW_VERSION_MINOR: c_int = 3;
@@ -492,8 +492,8 @@ extern "C" {
     pub fn glfwGetClipboardString(window: *mut GLFWwindow) -> *const c_char;
     pub fn glfwGetTime() -> c_double;
     pub fn glfwSetTime(time: c_double);
-    pub fn glfwGetTimerValue() -> uint64_t;
-    pub fn glfwGetTimerFrequency() -> uint64_t;
+    pub fn glfwGetTimerValue() -> u64;
+    pub fn glfwGetTimerFrequency() -> u64;
     pub fn glfwMakeContextCurrent(window: *mut GLFWwindow);
     // We don't expose this function for now; don't know how to get it to fit in the API. It would
     // have to return a SharedWindow, but we can't restrict its lifetime to the window it references
@@ -565,7 +565,7 @@ pub mod wgl {
 ))]
 pub mod x11 {
     use super::{ GLFWmonitor, GLFWwindow };
-    use libc::c_char;
+    use std::os::raw::c_char;
     use x11::xlib::{ Display, Window };
     use x11::xrandr::{ RRCrtc, RROutput };
 

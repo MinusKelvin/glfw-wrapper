@@ -4,7 +4,6 @@ extern crate enum_primitive;
 extern crate bitflags;
 #[macro_use]
 extern crate scopeguard;
-extern crate libc;
 
 #[cfg(all(
     any(feature = "expose-win32", feature = "expose-wgl"),
@@ -24,8 +23,8 @@ use std::ptr;
 use std::cell::{ RefCell, Cell };
 use std::slice;
 use std::ops::Deref;
+use std::os::raw::{ c_int, c_char };
 
-use libc::{ c_int, c_char };
 use enum_primitive::FromPrimitive;
 
 mod enums;
@@ -331,7 +330,7 @@ impl Glfw {
         )};
         get_error().map(|_| {
             assert!(!ptr.is_null());
-            Window::init(self, ptr)
+            Window::init(Some(self), ptr)
         })
     }
 

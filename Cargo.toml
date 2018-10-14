@@ -9,7 +9,6 @@ keywords = ["glfw", "windowing", "opengl"]
 license = "MIT"
 
 [dependencies]
-libc = "0.2"
 enum_primitive = "0.1"
 bitflags = "1.0"
 scopeguard = "0.3"

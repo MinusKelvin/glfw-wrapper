@@ -1,8 +1,8 @@
 use std::ffi::CString;
 use std::ptr;
 use std::ops::Deref;
+use std::hash::{ Hash, Hasher };
 
-use libc::c_void;
 use enum_primitive::FromPrimitive;
 
 use ffi;
@@ -29,17 +29,32 @@ use get_error;
 pub struct Window<'a> {
     pub(crate) ptr: *mut ffi::GLFWwindow,
     shared: SharedWindow,
-    glfw: &'a Glfw
+    glfw: Option<&'a Glfw>
 }
 
 impl<'a> Drop for Window<'a> {
     fn drop(&mut self) {
-        self.glfw.destroy_window(self.ptr);
+        if let Some(glfw) = self.glfw {
+            glfw.destroy_window(self.ptr);
+        }
+    }
+}
+
+impl<'a> Eq for Window<'a> {}
+impl<'a> PartialEq for Window<'a> {
+    fn eq(&self, other: &Window<'a>) -> bool {
+        self.shared() == other.shared()
+    }
+}
+
+impl<'a> Hash for Window<'a> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.shared().hash(hasher);
     }
 }
 
 impl<'a> Window<'a> {
-    pub(crate) fn init(glfw: &'a Glfw, ptr: *mut ffi::GLFWwindow) -> Self {
+    pub(crate) fn init(glfw: Option<&'a Glfw>, ptr: *mut ffi::GLFWwindow) -> Self {
         init_callbacks(ptr);
         Window {
             ptr: ptr,
@@ -357,23 +372,6 @@ impl<'a> Window<'a> {
         get_error()
     }
 
-    /// This function stands in for all of the `glfwSet*Callback` functions.
-    pub fn with_callbacks<'b, F, T, U>(
-        &self,
-        callbacks: &mut WindowCallbacks<'b, U>,
-        userdata: &mut U,
-        f: F
-    ) -> T
-    where F: FnOnce() -> T {
-        let prev = unsafe { ffi::glfwGetWindowUserPointer(self.ptr) };
-        let mut user = (callbacks, userdata);
-        unsafe { ffi::glfwSetWindowUserPointer(self.ptr,
-                &mut user as *mut (&mut WindowCallbacks<'b, U>, &mut U) as *mut c_void) };
-        // Defer to be safe on unwind
-        defer!(unsafe { ffi::glfwSetWindowUserPointer(self.ptr, prev) });
-        f()
-    }
-
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gaf5b859dbe19bdf434e42695ea45cc5f4
@@ -456,6 +454,7 @@ impl<'a> Deref for Window<'a> {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct SharedWindow(*mut ffi::GLFWwindow);
 unsafe impl Sync for SharedWindow {}
 
