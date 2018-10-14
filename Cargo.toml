@@ -17,7 +17,7 @@ scopeguard = "0.3"
 [dependencies.glfw-sys]
 git = "https://github.com/MinusKelvin/glfw-sys"
 version = "3.3"
-branch = "undecorated-extras"
+branch = "umbrella-extras"
 
 [features]
 expose-win32 = ["winapi"]
