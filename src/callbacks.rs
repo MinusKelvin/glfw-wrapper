@@ -1,8 +1,18 @@
+use std::os::raw::c_void;
+use std::path::PathBuf;
+
+use Action;
+use Key;
+use MouseButton;
+use Modifiers;
+use Window;
+use ffi;
+
 pub use self::monitor::Callback as MonitorCallback;
 pub(crate) mod monitor {
     use std::panic;
     use std::process::abort;
-    use libc::c_int;
+    use std::os::raw::c_int;
 
     use PROCESSING_EVENTS;
     use Monitor;
@@ -60,7 +70,7 @@ pub use self::joystick::Callback as JoystickCallback;
 pub(crate) mod joystick {
     use std::panic;
     use std::process::abort;
-    use libc::c_int;
+    use std::os::raw::c_int;
     use enum_primitive::FromPrimitive;
 
     use PROCESSING_EVENTS;
@@ -108,81 +118,17 @@ pub(crate) mod joystick {
     }
 }
 
-macro_rules! window_callback {
-    (
-        $name:ident
+macro_rules! window_callbacks {
+    ($($name:ident: $tname:ident {
         args = $($arg_n:ident: $arg_t:ty),*;
         glfw = $glfw:ident;
-        transform = $($glfw_n:ident: $glfw_t:ty),* => $($transform:expr),*;
-    ) => {
-        use std::panic;
-        use std::process::abort;
-        use libc::c_void;
-
-        use ffi;
-        use PROCESSING_EVENTS;
-        use callbacks::WindowCallbacks;
-
-        pub struct Owner<'a, U>(pub Option<Box<Callback<U> + 'a>>);
-
-        impl<'a, U> Owner<'a, U> {
-            pub fn set<F: Callback<U> + 'a>(&mut self, callback: F) {
-                self.0 = Some(Box::new(callback));
-            }
-
-            pub fn unset(&mut self) {
-                self.0 = None;
-            }
-        }
-
-        pub trait Callback<U> {
-            fn callback(&mut self, userdata: &mut U, $($arg_n: $arg_t),*);
-        }
-
-        impl<F, U> Callback<U> for F where F: FnMut(&mut U, $($arg_t),*) {
-            fn callback(&mut self, userdata: &mut U, $($arg_n: $arg_t),*) {
-                self(userdata, $($arg_n),*)
-            }
-        }
-
-        pub(crate) fn set(ptr: *mut ffi::GLFWwindow) {
-            unsafe {
-                ffi::$glfw(ptr, Some(callback));
-            }
-        }
-
-        extern "C" fn callback(ptr: *mut ffi::GLFWwindow, $($glfw_n: $glfw_t),*) {
-            if let Err(_) = panic::catch_unwind(|| unsafe {
-                PROCESSING_EVENTS.with(|v| v.set(true));
-                let callbacks = ffi::glfwGetWindowUserPointer(ptr) as
-                        *mut (&mut WindowCallbacks<c_void>, &mut c_void);
-                if !callbacks.is_null() {
-                    let callbacks = &mut *callbacks;
-                    if let Some(ref mut cb) = callbacks.0 .$name.0 {
-                        cb.callback(callbacks.1, $($transform),*);
-                    }
-                }
-                PROCESSING_EVENTS.with(|v| v.set(false));
-            }) {
-                eprintln!("Panic in GLFW {} callback", stringify!($name));
-                abort();
-            }
-        }
-    };
-}
-
-macro_rules! window_callbacks {
-    ($($name:ident: $tname:ident {$(use $s:path;)* args $($v:tt)*})*) => {
-        pub struct WindowCallbacks<'a, U> {
-            $(pub $name: $name::Owner<'a, U>),*
-        }
-
-        impl<'a, U> WindowCallbacks<'a, U> {
-            pub fn new() -> Self {
-                WindowCallbacks {
-                    $($name: $name::Owner(None)),*
-                }
-            }
+        use { $($s:path),* } in $($glfw_n:ident: $glfw_t:ty),* => $($transform:expr),*;
+    })*) => {
+        pub trait WindowCallbacks {
+            $(
+                #[allow(unused_variables)]
+                fn $name(&mut self, window: &Window $(, $arg_n: $arg_t)*) {}
+            )*
         }
 
         pub(crate) fn init_callbacks(ptr: *mut ::ffi::GLFWwindow) {
@@ -190,10 +136,38 @@ macro_rules! window_callbacks {
         }
 
         $(
-            pub use self::$name::Callback as $tname;
             pub(crate) mod $name {
+                use std::panic;
+                use std::process::abort;
+                use ffi;
+                use PROCESSING_EVENTS;
+                use WindowCallbacks;
+                use Window;
+
                 $(use $s;)*
-                window_callback!($name args $($v)*);
+
+                pub(crate) fn set(ptr: *mut ffi::GLFWwindow) {
+                    unsafe {
+                        ffi::$glfw(ptr, Some(callback));
+                    }
+                }
+
+                extern "C" fn callback(ptr: *mut ffi::GLFWwindow, $($glfw_n: $glfw_t),*) {
+                    if let Err(_) = panic::catch_unwind(|| unsafe {
+                        PROCESSING_EVENTS.with(|v| v.set(true));
+                        let callbacks = ffi::glfwGetWindowUserPointer(ptr)
+                                as *mut &mut WindowCallbacks;
+                        if !callbacks.is_null() {
+                            let callbacks = &mut *callbacks;
+                            let window_ref = Window::init(None, ptr);
+                            callbacks.$name(&window_ref, $($transform),*);
+                        }
+                        PROCESSING_EVENTS.with(|v| v.set(false));
+                    }) {
+                        eprintln!("Panic in GLFW {} callback", stringify!($name));
+                        abort();
+                    }
+                }
             }
         )*
     };
@@ -201,153 +175,166 @@ macro_rules! window_callbacks {
 
 window_callbacks! {
     window_pos: WindowPosCallback {
-        use libc::c_int;
         args = x: i32, y: i32;
         glfw = glfwSetWindowPosCallback;
-        transform = x: c_int, y: c_int => x, y;
+        use {
+            std::os::raw::c_int
+        } in x: c_int, y: c_int => x, y;
     }
 
     window_size: WindowSizeCallback {
-        use libc::c_int;
         args = width: i32, height: i32;
         glfw = glfwSetWindowSizeCallback;
-        transform = x: c_int, y: c_int => x, y;
+        use {
+            std::os::raw::c_int
+        } in  x: c_int, y: c_int => x, y;
     }
 
     window_close: WindowCloseCallback {
         args = ;
         glfw = glfwSetWindowCloseCallback;
-        transform = => ;
+        use {} in => ;
     }
 
     window_refresh: WindowRefreshCallback {
         args = ;
         glfw = glfwSetWindowRefreshCallback;
-        transform = => ;
+        use {} in => ;
     }
 
     window_focus: WindowFocusCallback {
-        use libc::c_int;
-        use cint_to_bool;
         args = focused: bool;
         glfw = glfwSetWindowFocusCallback;
-        transform = focused: c_int => cint_to_bool(focused);
+        use {
+            std::os::raw::c_int, cint_to_bool
+        } in focused: c_int => cint_to_bool(focused);
     }
 
     window_iconify: WindowIconifyCallback {
-        use libc::c_int;
-        use cint_to_bool;
         args = iconified: bool;
         glfw = glfwSetWindowIconifyCallback;
-        transform = iconified: c_int => cint_to_bool(iconified);
+        use {
+            std::os::raw::c_int, cint_to_bool
+        } in iconified: c_int => cint_to_bool(iconified);
     }
 
     window_maximize: WindowMaximizeCallback {
-        use libc::c_int;
-        use cint_to_bool;
         args = maximized: bool;
         glfw = glfwSetWindowMaximizeCallback;
-        transform = maximized: c_int => cint_to_bool(maximized);
+        use {
+            std::os::raw::c_int, cint_to_bool
+        } in maximized: c_int => cint_to_bool(maximized);
     }
 
     framebuffer_size: FramebufferSizeCallback {
-        use libc::c_int;
         args = width: i32, height: i32;
         glfw = glfwSetFramebufferSizeCallback;
-        transform = width: c_int, height: c_int => width, height;
+        use {
+            std::os::raw::c_int
+        } in width: c_int, height: c_int => width, height;
     }
 
     window_content_scale: WindowContentScaleCallback {
-        use libc::c_float;
         args = xscale: f32, yscale: f32;
         glfw = glfwSetWindowContentScaleCallback;
-        transform = xscale: c_float, yscale: c_float => xscale, yscale;
+        use {
+            std::os::raw::c_float
+        } in xscale: c_float, yscale: c_float => xscale, yscale;
     }
 
     mouse_button: MouseButtonCallback {
-        use libc::c_int;
-        use enum_primitive::FromPrimitive;
-        use cint_to_bool;
-        use MouseButton;
-        use Modifiers;
         args = button: MouseButton, pressed: bool, mods: Modifiers;
         glfw = glfwSetMouseButtonCallback;
-        transform = button: c_int, action: c_int, mods: c_int =>
+        use {
+            std::os::raw::c_int, MouseButton, Modifiers, cint_to_bool, enum_primitive::FromPrimitive
+        } in button: c_int, action: c_int, mods: c_int =>
                 MouseButton::from_i32(button).unwrap(),
                 cint_to_bool(action),
                 Modifiers::from_bits(mods).unwrap();
     }
 
     cursor_pos: CursorPosCallback {
-        use libc::c_double;
         args = x: f64, y: f64;
         glfw = glfwSetCursorPosCallback;
-        transform = x: c_double, y: c_double => x, y;
+        use {
+            std::os::raw::c_double
+        } in x: c_double, y: c_double => x, y;
     }
 
     cursor_enter: CursorEnterCallback {
-        use libc::c_int;
-        use cint_to_bool;
         args = entered: bool;
         glfw = glfwSetCursorEnterCallback;
-        transform = entered: c_int => cint_to_bool(entered);
+        use {
+            std::os::raw::c_int, cint_to_bool
+        } in entered: c_int => cint_to_bool(entered);
     }
 
     scroll: ScrollCallback {
-        use libc::c_double;
         args = xoffset: f64, yoffset: f64;
         glfw = glfwSetScrollCallback;
-        transform = xoffset: c_double, yoffset: c_double => xoffset, yoffset;
+        use {
+            std::os::raw::c_double
+        } in xoffset: c_double, yoffset: c_double => xoffset, yoffset;
     }
 
     key: KeyCallback {
-        use libc::c_int;
-        use enum_primitive::FromPrimitive;
-        use Action;
-        use Key;
-        use KeyCode;
-        use Modifiers;
         args = key: Key, action: Action, mods: Modifiers;
         glfw = glfwSetKeyCallback;
-        transform = key: c_int, scancode: c_int, action: c_int, mods: c_int =>
+        use {
+            std::os::raw::c_int, Key, KeyCode, Action, Modifiers, enum_primitive::FromPrimitive
+        } in key: c_int, scancode: c_int, action: c_int, mods: c_int =>
                 KeyCode::from_i32(key).map_or(Key::Unknown(scancode), |c| Key::Known(c)),
                 Action::from_i32(action).unwrap(),
                 Modifiers::from_bits(mods).unwrap();
     }
 
     char: CharCallback {
-        use libc::c_uint;
-        use std::char::from_u32;
         args = char: char;
         glfw = glfwSetCharCallback;
-        transform = char: c_uint => from_u32(char).unwrap();
+        use {
+            std::os::raw::c_uint, std::char::from_u32
+        } in char: c_uint => from_u32(char).unwrap();
     }
 
     char_mods: CharModsCallback {
-        use libc::c_uint;
-        use libc::c_int;
-        use std::char::from_u32;
-        use Modifiers;
         args = char: char, mods: Modifiers;
         glfw = glfwSetCharModsCallback;
-        transform = char: c_uint, mods: c_int =>
+        use {
+            std::os::raw::c_int, std::os::raw::c_uint, std::char::from_u32, Modifiers
+        } in char: c_uint, mods: c_int =>
                 from_u32(char).unwrap(),
                 Modifiers::from_bits(mods).unwrap();
     }
 
     file_drop: FileDropCallback {
-        use libc::c_int;
-        use libc::c_char;
-        use std::slice;
-        use std::path::PathBuf;
-        use std::ffi::CStr;
         args = paths: Vec<PathBuf>;
         glfw = glfwSetDropCallback;
-        transform = count: c_int, paths: *const *const c_char => {
+        use {
+            std::os::raw::c_int, std::os::raw::c_char, std::slice, std::path::PathBuf,
+            std::ffi::CStr
+        } in count: c_int, paths: *const *const c_char => {
             let s = slice::from_raw_parts(paths, count as usize);
             s.iter().map(|p|
                     PathBuf::from(CStr::from_ptr(*p).to_string_lossy().into_owned())
             ).collect()
         };
     }
+}
+
+/// This function stands in for all of the `glfwSet*Callback` functions.
+pub fn with_callbacks<'b, F, T>(windows: &[&Window], mut callbacks: &mut WindowCallbacks, f: F) -> T
+where F: FnOnce() -> T {
+    let mut prev = Vec::with_capacity(windows.len());
+    let ptr = &mut callbacks as *mut &mut WindowCallbacks;
+    for w in windows.iter() {
+        prev.push(unsafe { ffi::glfwGetWindowUserPointer(w.ptr) });
+        unsafe { ffi::glfwSetWindowUserPointer(w.ptr, ptr as *mut c_void) };
+    }
+    // Defer to be safe on unwind
+    defer! {
+        for (w, &p) in windows.iter().zip(prev.iter()) {
+            unsafe { ffi::glfwSetWindowUserPointer(w.ptr, p) }
+        }
+    }
+    f()
 }
