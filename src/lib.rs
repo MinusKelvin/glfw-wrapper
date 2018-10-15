@@ -58,6 +58,11 @@ pub struct Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub enum InitError {
+    AlreadyInitialized,
+    Failed(Error)
+}
+
 /// [GLFW Reference][glfw]
 /// 
 /// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga9f8ffaacf3c269cc48eafbf8b9b71197
@@ -100,25 +105,21 @@ pub fn get_error() -> Result<()> {
 /// Tracks the initialization state of the GLFW library.
 /// * `false` represents uninitialized
 /// * `true` represents initialized
-/// If a [`Context`] exists, this will be `true`.
+/// If a [`Glfw`] exists, this will be `true`.
+/// 
+/// [`Glfw`]: struct.Glfw.html
 static INIT_STATE: AtomicBool = ATOMIC_BOOL_INIT;
 
-/// Initialize the GLFW library. [GLFW Reference][glfw]
+/// [GLFW Reference][glfw]
 /// 
 /// This function must be called on the first thread of the process, at least on Mac OS. All of the
 /// restrictions about what can and can't be done from the main thread should be encoded in the type
 /// system.
 /// 
-/// # Returns
-/// 
-/// * `Ok(Some(_))` if no context already exists
-/// * `Ok(None)` if a context already exists
-/// * `Err(_)` if an error occured during initialization
-/// 
 /// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga317aac130a235ab08c6db0834907d85e
-pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
+pub fn init(init_hints: &[InitHint]) -> std::result::Result<Glfw, InitError> {
     extern "C" fn err_cb(code: c_int, _: *const c_char) {
-        if let Some(_) = ErrorKind::from_i32(code) { return }
+        if ErrorKind::from_i32(code).is_some() { return }
         eprintln!("{} error occured. This should not be possible.", match code {
             ffi::GLFW_NOT_INITIALIZED => "GLFW_NOT_INITIALIZED",
             ffi::GLFW_INVALID_ENUM => "GLFW_INVALID_ENUM",
@@ -145,16 +146,16 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
         }
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
             callbacks::monitor::initialize();
-            Ok(Some(Glfw {
+            Ok(Glfw {
                 shared: SharedGlfw(PhantomData),
                 _phantom: PhantomData
-            }))
+            })
         } else {
             INIT_STATE.store(false, Ordering::SeqCst);
-            Err(get_error().unwrap_err())
+            Err(InitError::Failed(get_error().unwrap_err()))
         }
     } else {
-        Ok(None)
+        Err(InitError::AlreadyInitialized)
     }
 }
 

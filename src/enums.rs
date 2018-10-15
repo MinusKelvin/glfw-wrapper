@@ -355,28 +355,28 @@ pub enum SetWindowAttribute {
 
 bitflags! {
     pub struct Modifiers: c_int {
-        const Shift = ffi::GLFW_MOD_SHIFT;
-        const Control = ffi::GLFW_MOD_CONTROL;
-        const Alt = ffi::GLFW_MOD_ALT;
-        const Super = ffi::GLFW_MOD_SUPER;
-        const CapsLock = ffi::GLFW_MOD_CAPS_LOCK;
-        const NumLock = ffi::GLFW_MOD_NUM_LOCK;
+        const SHIFT = ffi::GLFW_MOD_SHIFT;
+        const CONTROL = ffi::GLFW_MOD_CONTROL;
+        const ALT = ffi::GLFW_MOD_ALT;
+        const SUPER = ffi::GLFW_MOD_SUPER;
+        const CAPSLOCK = ffi::GLFW_MOD_CAPS_LOCK;
+        const NUMLOCK = ffi::GLFW_MOD_NUM_LOCK;
     }
 }
 
 bitflags! {
     pub struct JoystickHat: c_uchar {
-        const Centered = ffi::GLFW_HAT_CENTERED as u8;
+        const CENTERED = ffi::GLFW_HAT_CENTERED as u8;
 
-        const Up = ffi::GLFW_HAT_UP as u8;
-        const Right = ffi::GLFW_HAT_RIGHT as u8;
-        const Down = ffi::GLFW_HAT_DOWN as u8;
-        const Left = ffi::GLFW_HAT_LEFT as u8;
+        const UP = ffi::GLFW_HAT_UP as u8;
+        const RIGHT = ffi::GLFW_HAT_RIGHT as u8;
+        const DOWN = ffi::GLFW_HAT_DOWN as u8;
+        const LEFT = ffi::GLFW_HAT_LEFT as u8;
 
-        const RightUp =   ffi::GLFW_HAT_RIGHT_UP as u8;
-        const RightDown = ffi::GLFW_HAT_RIGHT_DOWN as u8;
-        const LeftUp =    ffi::GLFW_HAT_LEFT_UP as u8;
-        const LeftDown =  ffi::GLFW_HAT_LEFT_DOWN as u8;
+        const RIGHT_UP =   ffi::GLFW_HAT_RIGHT_UP as u8;
+        const RIGHT_DOWN = ffi::GLFW_HAT_RIGHT_DOWN as u8;
+        const LEFT_UP =    ffi::GLFW_HAT_LEFT_UP as u8;
+        const LEFT_DOWN =  ffi::GLFW_HAT_LEFT_DOWN as u8;
     }
 }
 
