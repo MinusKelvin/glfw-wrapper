@@ -50,19 +50,15 @@ mod util;
 
 use util::*;
 
+/// Represents a GLFW error.
 #[derive(Debug)]
 pub struct Error {
     pub kind: ErrorKind,
     pub description: String
 }
 
+/// Specialized `Result` type for GLFW errors.
 pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Debug)]
-pub enum InitError {
-    AlreadyInitialized,
-    Failed(Error)
-}
 
 /// [GLFW Reference][glfw]
 /// 
@@ -80,11 +76,13 @@ pub fn get_version_string() -> Cow<'static, str> {
     unsafe { CStr::from_ptr(ffi::glfwGetVersionString()) }.to_string_lossy()
 }
 
-/// [GLFW Reference][glfw]
+/// Retrieves and clears the last GLFW error that occured on the calling thread.
 /// 
 /// Currently, all functions that the documentation says could result in errors other than
 /// `GLFW_NOT_INITIALIZED` and `GLFW_INVALID_ENUM` return a result obtained from calling this
 /// function, clearing the error. Until this changes, this function should always return `Ok`.
+/// 
+/// [GLFW Reference][glfw]
 /// 
 /// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga944986b4ec0b928d488141f92982aa18
 pub fn get_error() -> Result<()> {
@@ -104,21 +102,70 @@ pub fn get_error() -> Result<()> {
 }
 
 /// Tracks the initialization state of the GLFW library.
+/// 
 /// * `false` represents uninitialized
 /// * `true` represents initialized
+/// 
 /// If a [`Glfw`] exists, this will be `true`.
 /// 
 /// [`Glfw`]: struct.Glfw.html
 static INIT_STATE: AtomicBool = ATOMIC_BOOL_INIT;
 
-/// [GLFW Reference][glfw]
+#[derive(Debug)]
+pub enum InitError {
+    AlreadyInitialized,
+    Failed(Error)
+}
+
+/// GLFW library initialization hints.
+#[derive(Debug, Copy, Clone)]
+pub struct InitHints {
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/intro_guide.html#GLFW_COCOA_CHDIR_RESOURCES)
+    pub cocoa_chdir_resources: bool,
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/intro_guide.html#GLFW_COCOA_MENUBAR)
+    pub cocoa_menubar: bool,
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/intro_guide.html#GLFW_JOYSTICK_HAT_BUTTONS)
+    pub joystick_hat_buttons: bool,
+    _private: ()
+}
+
+impl Default for InitHints {
+    fn default() -> Self {
+        InitHints {
+            cocoa_chdir_resources: true,
+            cocoa_menubar: true,
+            joystick_hat_buttons: true,
+            _private: ()
+        }
+    }
+}
+
+/// Initializes GLFW.
+/// 
+/// Calls to this function while a [`Glfw`] instance exists results in an
+/// `Err(InitError::AlreadyInitialized)`.
 /// 
 /// This function must be called on the first thread of the process, at least on Mac OS. All of the
 /// restrictions about what can and can't be done from the main thread should be encoded in the type
 /// system.
 /// 
-/// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga317aac130a235ab08c6db0834907d85e
-pub fn init(init_hints: &[InitHint]) -> std::result::Result<Glfw, InitError> {
+/// # Deviation from GLFW
+/// 
+/// Instead of setting initialization hints through a separate (stateful) function, this function
+/// takes an [`InitHints`] doubles as `glfwInitHint`. We do this because `glfwInitHint` must only
+/// be called from the main thread, and we cannot enforce that without an instance of a type that
+/// can only live on the main thread.
+/// 
+/// # See Also
+/// 
+/// * [`glfwInit()`]
+/// * [`glfwInitHint()`]
+/// 
+/// [`Glfw`]: struct.Glfw.html
+/// [`InitHints`]: struct.InitHints.html
+/// [`glfwInit()`]: http://www.glfw.org/docs/3.3/group__init.html#ga317aac130a235ab08c6db0834907d85e
+/// [`glfwInitHint()`]: http://www.glfw.org/docs/3.3/group__init.html#ga110fd1d3f0412822b4f1908c026f724a
+pub fn init(init_hints: InitHints) -> std::result::Result<Glfw, InitError> {
     extern "C" fn err_cb(code: c_int, _: *const c_char) {
         if ErrorKind::from_i32(code).is_some() { return }
         eprintln!("{} error occured. This should not be possible.", match code {
@@ -131,19 +178,17 @@ pub fn init(init_hints: &[InitHint]) -> std::result::Result<Glfw, InitError> {
     }
 
     if INIT_STATE.swap(true, Ordering::SeqCst) == false {
-        unsafe { ffi::glfwSetErrorCallback(Some(err_cb)) };
-        for hint in init_hints {
-            match hint {
-                InitHint::CocoaChDirResources(enable) => unsafe {
-                    ffi::glfwInitHint(ffi::GLFW_COCOA_CHDIR_RESOURCES, bool_to_cint(*enable))
-                }
-                InitHint::CocoaMenubar(enable) => unsafe {
-                    ffi::glfwInitHint(ffi::GLFW_COCOA_MENUBAR, bool_to_cint(*enable))
-                }
-                InitHint::JoystickHatButtons(enable) => unsafe {
-                    ffi::glfwInitHint(ffi::GLFW_JOYSTICK_HAT_BUTTONS, bool_to_cint(*enable))
-                }
-            }
+        unsafe {
+            ffi::glfwSetErrorCallback(Some(err_cb));
+            ffi::glfwInitHint(
+                ffi::GLFW_COCOA_CHDIR_RESOURCES,
+                bool_to_cint(init_hints.cocoa_chdir_resources)
+            );
+            ffi::glfwInitHint(ffi::GLFW_COCOA_MENUBAR, bool_to_cint(init_hints.cocoa_menubar));
+            ffi::glfwInitHint(
+                ffi::GLFW_JOYSTICK_HAT_BUTTONS,
+                bool_to_cint(init_hints.joystick_hat_buttons)
+            );
         }
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
             callbacks::monitor::initialize();
@@ -173,6 +218,8 @@ enum ReentranceAvoidanceCommand {
 }
 
 /// Represents ownership of the GLFW library.
+/// 
+/// Only one of these can exist at any point in time. Terminates the GLFW library when dropped.
 pub struct Glfw {
     shared: SharedGlfw,
     _phantom: PhantomData<*const ()>
@@ -423,8 +470,8 @@ impl Glfw {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga237a182e5ec0b21ce64543f3b5e7e2be
     pub fn get_key_name(&self, key: Key) -> Result<Option<String>> {
         let ptr = unsafe { match key {
-            Key::Known(kc) => ffi::glfwGetKeyName(kc as i32, 0),
-            Key::Unknown(sc) => ffi::glfwGetKeyName(ffi::GLFW_KEY_UNKNOWN, sc)
+            Key::Named(kc) => ffi::glfwGetKeyName(kc as i32, 0),
+            Key::Unnamed(sc) => ffi::glfwGetKeyName(ffi::GLFW_KEY_UNKNOWN, sc)
         } };
         get_error().map(|_| unsafe {
             ptr.as_ref().map(|p| CStr::from_ptr(p).to_string_lossy().into_owned())
@@ -502,12 +549,12 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga2d8d0634bb81c180899aeb07477a67ea
-    pub fn get_joystick_hats(&self, joystick: Joystick) -> Result<Option<Vec<JoystickHat>>> {
+    pub fn get_joystick_hats(&self, joystick: Joystick) -> Result<Option<Vec<JoystickHatState>>> {
         let mut count = 0;
         let ptr = unsafe { ffi::glfwGetJoystickHats(joystick as i32, &mut count) };
         get_error().map(|_| unsafe {
             ptr.as_ref().map(|p| slice::from_raw_parts(p, count as usize)
-                    .iter().map(|c| JoystickHat::from_bits(*c).unwrap()).collect())
+                    .iter().map(|c| JoystickHatState::from_bits(*c).unwrap()).collect())
         })
     }
 
@@ -613,6 +660,10 @@ impl Deref for Glfw {
 }
 
 /// Encapsulates GLFW library calls that can be called from any thread.
+/// 
+/// Can only be obtained from [`Glfw::shared()`].
+/// 
+/// [`Glfw::shared()`]: struct.Glfw.html#method.shared
 pub struct SharedGlfw(PhantomData<*const ()>);
 unsafe impl Sync for SharedGlfw {}
 

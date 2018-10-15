@@ -253,7 +253,7 @@ window_callbacks! {
         args = key: Key, action: Action, mods: Modifiers;
         glfw = glfwSetKeyCallback;
         transform = key: c_int, scancode: c_int, action: c_int, mods: c_int =>
-                KeyCode::from_i32(key).map_or(Key::Unknown(scancode), |c| Key::Known(c)),
+                KeyCode::from_i32(key).map_or(Key::Unnamed(scancode), |c| Key::Named(c)),
                 Action::from_i32(action).unwrap(),
                 Modifiers::from_bits(mods).unwrap();
     }

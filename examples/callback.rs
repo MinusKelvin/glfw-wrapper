@@ -4,7 +4,7 @@ extern crate gl;
 use glfw_wrapper::*;
 
 fn main() {
-    let glfw = glfw_wrapper::init(&[]).unwrap();
+    let glfw = glfw_wrapper::init(InitHints::default()).unwrap();
 
     glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfile::Core));
     glfw.window_hint(WindowHint::OpenGlForwardCompat(true));

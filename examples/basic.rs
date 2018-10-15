@@ -1,8 +1,10 @@
 extern crate glfw_wrapper;
 extern crate gl;
 
+use glfw_wrapper::InitHints;
+
 fn main() {
-    let glfw = glfw_wrapper::init(&[]).unwrap();
+    let glfw = glfw_wrapper::init(InitHints::default()).unwrap();
 
     let window = glfw.create_window(800, 600, "Basic Example", None, None).unwrap();
 

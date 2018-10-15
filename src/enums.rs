@@ -12,6 +12,11 @@ enum_from_primitive! {
 }
 
 enum_from_primitive! {
+    /// Named keys.
+    /// 
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__keys.html
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub enum KeyCode {
@@ -139,10 +144,11 @@ enum_from_primitive! {
     }
 }
 
+/// Keyboard key
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Key {
-    Known(KeyCode),
-    Unknown(i32)
+    Named(KeyCode),
+    Unnamed(i32)
 }
 
 enum_from_primitive! {
@@ -171,6 +177,7 @@ enum_from_primitive! {
 }
 
 enum_from_primitive! {
+    /// Joystick ID
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub enum Joystick {
@@ -194,6 +201,9 @@ enum_from_primitive! {
 }
 
 enum_from_primitive! {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__errors.html
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub enum ErrorKind {
@@ -209,6 +219,9 @@ enum_from_primitive! {
 }
 
 enum_from_primitive! {
+    /// [GLFW reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__shapes.html
     #[repr(i32)]
     #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
     pub enum StandardCursorShape {
@@ -319,13 +332,6 @@ pub enum WindowHint<'a> {
     X11InstanceName(&'a str)
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum InitHint {
-    JoystickHatButtons(bool),
-    CocoaChDirResources(bool),
-    CocoaMenubar(bool)
-}
-
 enum_from_primitive! {
     #[repr(i32)]
     #[derive(Copy, Clone, Hash, Debug)]
@@ -354,6 +360,9 @@ pub enum SetWindowAttribute {
 }
 
 bitflags! {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__mods.html
     pub struct Modifiers: c_int {
         const SHIFT = ffi::GLFW_MOD_SHIFT;
         const CONTROL = ffi::GLFW_MOD_CONTROL;
@@ -365,7 +374,10 @@ bitflags! {
 }
 
 bitflags! {
-    pub struct JoystickHat: c_uchar {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__hat__state.html
+    pub struct JoystickHatState: c_uchar {
         const CENTERED = ffi::GLFW_HAT_CENTERED as u8;
 
         const UP = ffi::GLFW_HAT_UP as u8;
