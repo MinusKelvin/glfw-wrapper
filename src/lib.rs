@@ -58,6 +58,7 @@ pub struct Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug)]
 pub enum InitError {
     AlreadyInitialized,
     Failed(Error)
