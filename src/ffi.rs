@@ -408,7 +408,8 @@ extern "C" {
     pub fn glfwSetGamma(monitor: *mut GLFWmonitor, gamma: c_float);
     pub fn glfwGetGammaRamp(monitor: *mut GLFWmonitor) -> *const GLFWgammaramp;
     pub fn glfwSetGammaRamp(monitor: *mut GLFWmonitor, ramp: *const GLFWgammaramp);
-    pub fn glfwDefaultWindowHints();
+    // Defaults are encoded in the default constructor of the WindowHints struct
+    #[allow(unused)] pub fn glfwDefaultWindowHints();
     pub fn glfwWindowHint(hint: c_int, value: c_int);
     pub fn glfwWindowHintString(hint: c_int, value: *const c_char);
     pub fn glfwCreateWindow(width: c_int, height: c_int, title: *const c_char, monitor: *mut GLFWmonitor, share: *mut GLFWwindow) -> *mut GLFWwindow;

@@ -6,12 +6,12 @@ use glfw_wrapper::*;
 fn main() {
     let glfw = glfw_wrapper::init(InitHints::default()).unwrap();
 
-    glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfile::Core));
-    glfw.window_hint(WindowHint::OpenGlForwardCompat(true));
-    glfw.window_hint(WindowHint::ContextVersionMajor(3));
-    glfw.window_hint(WindowHint::ContextVersionMinor(2));
-
-    let window = glfw.create_window(800, 600, "Basic Example", None, None).unwrap();
+    let window = glfw.create_window(&WindowHints {
+        opengl_profile: OpenGlProfile::Core,
+        opengl_forward_compatible: true,
+        context_version: (3, 2),
+        ..WindowHints::default()
+    }, 800, 600, "Basic Example", None, None).unwrap();
 
     unsafe {
         window.make_context_current().unwrap();

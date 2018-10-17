@@ -284,52 +284,286 @@ enum_from_primitive! {
     }
 }
 
+/// GLFW window creation hints.
+/// 
+/// Some window hints are hard constraints. If the available capabilities cannot match the requested
+/// hard constraints exactly, window and context creation will fail. Soft constraints are matched as
+/// closely as possible, but the resulting window and context may differ from what was requested.
+/// 
+/// The following hints are hard constraints:
+/// * [`stereo`](#structfield.stereo)
+/// * [`double_buffer`](#structfield.double_buffer)
+/// * [`client_api`](#structfield.client_api)
+/// * [`context_creation_api`](#structfield.context_creation_api)
+/// 
+/// The following hints are hard constraints when requesting an OpenGL context, but ignored when
+/// requesting an OpenGL ES context:
+/// * [`opengl_forwad_compatible`](#structfield.opengl_forward_compatible)
+/// * [`opengl_profile`](#structfield.opengl_profile)
+/// 
+/// # See Also
+/// 
+/// * [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#window_hints)
 #[derive(Copy, Clone, Debug)]
-pub enum WindowHint<'a> {
-    Resizable(bool),
-    Visible(bool),
-    Decorated(bool),
-    Focused(bool),
-    AutoIconify(bool),
-    Floating(bool),
-    Maximized(bool),
-    CenterCursor(bool),
-    TransparentFramebuffer(bool),
+pub struct WindowHints<'a> {
+    /// Specifies whether the user will be able to resize the window.
+    /// This hint is ignored for fullscreen an undecorated windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_RESIZABLE_hint)
+    pub resizable: bool,
+    /// Specifies whether the window will be shown when it is created.
+    /// This hint is ignored for fullscreen windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_VISIBLE_hint)
+    pub visible: bool,
+    /// Specifies whether the window will have decorations, usually a system title bar, borders,
+    /// close, maximise, and minimize buttons, etc.
+    /// This hint is ignored for fullscreen windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_DECORATED_hint)
+    pub decorated: bool,
+    /// Specifies whether the window will be given input focus when created.
+    /// This hint is ignored for fullscreen and initially hidden windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_FOCUSED_hint)
+    pub focused: bool,
+    /// Specifies whether the fullscreen window will automatically iconify the window when input
+    /// focus is lost. This hint is ignored for windowed mode windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_AUTO_ICONIFY_hint)
+    pub auto_iconify: bool,
+    /// Specifies whether the window should be topmost or always-on-top. This is intended primarily
+    /// for debugging purposes. This hint is ignored for fullscreen windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_FLOATING_hint)
+    pub floating: bool,
+    /// Specifies whether the window will be maximised when created.
+    /// This hint is ignored for fullscreen windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_MAXIMIZED_hint)
+    pub maximized: bool,
+    /// Specifies whether the cursor should be centered over newly created fullscreen windows.
+    /// This hint is ignored for windowed mode windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CENTER_CURSOR_hint)
+    pub center_cursor: bool,
+    /// Specifies whether the window framebuffer should be transparent. If supported by the system,
+    /// the alpha channel of the framebuffer will be used to combine the framebuffer with the
+    /// background. This does not affect window decorations.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_TRANSPARENT_FRAMEBUFFER_hint)
+    pub transparent_framebuffer: bool,
     // Missing from http://www.glfw.org/docs/3.3/window_guide.html#window_hints_values
-    // FocusOnShow(bool),
-    RedBits(Option<i32>),
-    GreenBits(Option<i32>),
-    BlueBits(Option<i32>),
-    AlphaBits(Option<i32>),
-    DepthBits(Option<i32>),
-    StencilBits(Option<i32>),
-    AccumRedBits(Option<i32>),
-    AccumGreenBits(Option<i32>),
-    AccumBlueBits(Option<i32>),
-    AccumAlphaBits(Option<i32>),
-    AuxiliaryBuffers(Option<i32>),
-    Samples(Option<i32>),
-    RefreshRate(Option<i32>),
-    Stereo(bool),
-    SrgbCapable(bool),
-    DoubleBuffer(bool),
-    ClientApi(ClientApi),
-    ContextCreationApi(ContextCreationApi),
-    ContextVersionMajor(i32),
-    ContextVersionMinor(i32),
-    ContextRobustness(ContextRobustness),
-    ContextReleaseBehavior(ContextReleaseBehavior),
-    OpenGlForwardCompat(bool),
-    OpenGlDebugContext(bool),
-    OpenGlProfile(OpenGlProfile),
+    // FocusOnShow: bool,
+    /// Specifies the desired bit depth of the default framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_RED_BITS)
+    pub red_bits: Option<i32>,
+    /// Specifies the desired bit depth of the default framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_GREEN_BITS)
+    pub green_bits: Option<i32>,
+    /// Specifies the desired bit depth of the default framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_BLUE_BITS)
+    pub blue_bits: Option<i32>,
+    /// Specifies the desired bit depth of the default framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_ALPHA_BITS)
+    pub alpha_bits: Option<i32>,
+    /// Specifies the desired bit depth of the default framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_DEPTH_BITS)
+    pub depth_bits: Option<i32>,
+    /// Specifies the desired bit depth of the default framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_STENCIL_BITS)
+    pub stencil_bits: Option<i32>,
+    /// Specifies the desired bit depth of the accumulation framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// Accumulation buffers are a legacy OpenGL feature and should not be used in new code.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_ACCUM_RED_BITS)
+    pub accum_red_bits: Option<i32>,
+    /// Specifies the desired bit depth of the accumulation framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// Accumulation buffers are a legacy OpenGL feature and should not be used in new code.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_ACCUM_GREEN_BITS)
+    pub accum_green_bits: Option<i32>,
+    /// Specifies the desired bit depth of the accumulation framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// Accumulation buffers are a legacy OpenGL feature and should not be used in new code.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_ACCUM_BLUE_BITS)
+    pub accum_blue_bits: Option<i32>,
+    /// Specifies the desired bit depth of the accumulation framebuffer. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// Accumulation buffers are a legacy OpenGL feature and should not be used in new code.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_ACCUM_ALPHA_BITS)
+    pub accum_alpha_bits: Option<i32>,
+    /// Specifies the desired number of auxiliary buffers. `None` indicates that the application
+    /// has no preference.
+    /// 
+    /// Auxiliary buffers are a legacy OpenGL feature and should not be used in new code.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_AUX_BUFFERS)
+    pub auxiliary_buffers: Option<i32>,
+    /// Specifies the desired number of samples to use for multisampling. `None` indicates that the
+    /// application has no preference.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_SAMPLES)
+    pub samples: Option<i32>,
+    /// Specifies the desired refresh rate for fullscreen windows. `None` means the highest
+    /// available refresh rate will be used. This hint is ignored for windowed mode windows.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_REFRESH_RATE)
+    pub refresh_rate: Option<i32>,
+    /// Specifies whether to use OpenGL stereoscopic rendering. This is a hard constraint.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_STEREO)
+    pub stereo: bool,
+    /// Specifies whether the framebuffer should be sRGB capable.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_SRGB_CAPABLE)
+    pub srgb_capable: bool,
+    /// Specifies whether the framebuffer should be double buffered. This is nearly always
+    /// desireable. This is a hard constraint.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_DOUBLEBUFFER)
+    pub double_buffer: bool,
+    /// Specifies which client API to create the context for. This is a hard constraint.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CLIENT_API_hint)
+    pub client_api: ClientApi,
+    /// Specifies which context creation API to use to create the context. If no client API is
+    /// requested, this hint is ignored. This is a hard constraint.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CONTEXT_CREATION_API_hint)
+    pub context_creation_api: ContextCreationApi,
+    /// Specifies the client API version that the created context must be compatible with. This is
+    /// not a hard constraint, but creation will fail if the created context is less than the one
+    /// requested. If a version of OpenGL version 1.0 is requested, GLFW will attempt to provide the
+    /// highest supported version. If OpenGL ES 1.x is requested, creation will fail if OpenGL ES
+    /// 2.0 or later is returned, since OpenGL ES 2.0 is not backwards compatible with 1.x.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CONTEXT_VERSION_MAJOR_hint)
+    pub context_version: (i32, i32),
+    /// Specifies the robustness strategy to be used by the context.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CONTEXT_ROBUSTNESS_hint)
+    pub context_robustness: ContextRobustness,
+    /// Specifies the release behaviour to be used by the context.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CONTEXT_RELEASE_BEHAVIOR_hint)
+    pub context_release_behavior: ContextReleaseBehavior,
+    /// Specifies whether the created OpenGL context should be forward-compatible, i.e. one where
+    /// all functionality deprecated in the requested version is removed. If OpenGL ES is requested,
+    /// this hint is ignored.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_OPENGL_FORWARD_COMPAT_hint)
+    pub opengl_forward_compatible: bool,
+    /// Specifies whether to create a debug OpenGL context, which may have additional error and
+    /// performance issue reporting functionality. This hint is ignored if OpenGL ES is requested.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_OPENGL_DEBUG_CONTEXT_hint)
+    pub opengl_debug_context: bool,
+    /// Specifies which OpenGL profile to create the context for.
+    /// This hint is ignored if OpenGL ES is requested.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_OPENGL_PROFILE_hint)
+    pub opengl_profile: OpenGlProfile,
     // Missing from http://www.glfw.org/docs/3.3/window_guide.html#window_hints_values
     // but present elsewhere in the documentation, so we will expose it
-    ContextNoError(bool),
-    CocoaRetinaFramebuffer(bool),
-    CocoaFrameName(&'a str),
-    CocoaGraphicsSwitching(bool),
-    X11ClassName(&'a str),
-    X11InstanceName(&'a str)
+    /// Specifies whether errors should be generated by the context. If enabled, situations that
+    /// would have generated errors instead cause undefined behavior.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_CONTEXT_NO_ERROR_hint)
+    pub context_no_error: bool,
+    /// Specifies whether to use full resolution framebuffers on Retina displays. This hint is
+    /// ignored on platforms other than macOS.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_COCOA_RETINA_FRAMEBUFFER_hint)
+    pub cocoa_retina_framebuffer: bool,
+    /// Specifies the name to use when autosaving the window frame, or if empty disables frame
+    /// autosaving for the window. This hint is ignored on platforms other than macOS.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_COCOA_FRAME_NAME_hint)
+    pub cocoa_frame_name: &'a str,
+    /// Specifies whether to allow Automatic Graphics Switching, i.e. to allow the system to choose
+    /// the integrated GPU for the OpenGL context and move it between GPUs if necessary or whether
+    /// to force it to always run on the discrete GPU. This hint is ignored on platforms other than
+    /// macOS.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_COCOA_GRAPHICS_SWITCHING_hint)
+    pub cocoa_graphics_switching: bool,
+    /// Specifies the desired (ASCII-encoded) class part of the ICCCM `WM_CLASS` property. This hint
+    /// is ignored for windowing systems other than X11.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_X11_CLASS_NAME)
+    pub x11_class_name: &'a str,
+    /// Specifies the desired (ASCII-encoded) instance part of the ICCCM `WM_CLASS` property. This
+    /// hint is ignored for windowing systems other than X11.
+    /// 
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/window_guide.html#GLFW_X11_INSTANCE_NAME)
+    pub x11_instance_name: &'a str
+}
+
+impl<'a> Default for WindowHints<'a> {
+    fn default() -> Self {
+        WindowHints {
+            resizable: true,
+            visible: true,
+            decorated: true,
+            focused: true,
+            auto_iconify: true,
+            floating: false,
+            maximized: false,
+            center_cursor: true,
+            transparent_framebuffer: false,
+            red_bits: Some(8),
+            green_bits: Some(8),
+            blue_bits: Some(8),
+            alpha_bits: Some(8),
+            depth_bits: Some(24),
+            stencil_bits: Some(8),
+            accum_red_bits: Some(0),
+            accum_green_bits: Some(0),
+            accum_blue_bits: Some(0),
+            accum_alpha_bits: Some(0),
+            auxiliary_buffers: Some(0),
+            samples: Some(0),
+            refresh_rate: None,
+            stereo: false,
+            srgb_capable: false,
+            double_buffer: true,
+            client_api: ClientApi::OpenGl,
+            context_creation_api: ContextCreationApi::Native,
+            context_version: (1, 0),
+            context_robustness: ContextRobustness::NoRobustness,
+            context_release_behavior: ContextReleaseBehavior::Any,
+            opengl_forward_compatible: false,
+            opengl_debug_context: false,
+            opengl_profile: OpenGlProfile::Any,
+            context_no_error: false,
+            cocoa_retina_framebuffer: true,
+            cocoa_frame_name: "",
+            cocoa_graphics_switching: false,
+            x11_class_name: "",
+            x11_instance_name: ""
+        }
+    }
 }
 
 enum_from_primitive! {
@@ -408,4 +642,27 @@ pub enum SetInputMode {
     StickyKeys(bool),
     StickyMouseButtons(bool),
     LockKeyMods(bool)
+}
+
+/// GLFW library initialization hints.
+#[derive(Debug, Copy, Clone)]
+pub struct InitHints {
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/intro_guide.html#GLFW_COCOA_CHDIR_RESOURCES)
+    pub cocoa_chdir_resources: bool,
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/intro_guide.html#GLFW_COCOA_MENUBAR)
+    pub cocoa_menubar: bool,
+    /// [GLFW Reference](http://www.glfw.org/docs/3.3/intro_guide.html#GLFW_JOYSTICK_HAT_BUTTONS)
+    pub joystick_hat_buttons: bool,
+    _private: ()
+}
+
+impl Default for InitHints {
+    fn default() -> Self {
+        InitHints {
+            cocoa_chdir_resources: true,
+            cocoa_menubar: true,
+            joystick_hat_buttons: true,
+            _private: ()
+        }
+    }
 }

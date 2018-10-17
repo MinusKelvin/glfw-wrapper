@@ -17,7 +17,12 @@ Normally, `glfw-wrapper` will try to compile the GLFW library. To disable this, 
 ```rust
 let glfw = glfw_wrapper::init(&[]).unwrap();
 
-let window = glfw.create_window(800, 600, "Basic Example", None, None).unwrap();
+let window = glfw.create_window(
+    &WindowHints::default(),
+    800, 600,
+    "Basic Example",
+    None, None
+).unwrap();
 
 unsafe {
     window.make_context_current().unwrap();

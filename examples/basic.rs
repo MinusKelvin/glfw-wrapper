@@ -1,12 +1,17 @@
 extern crate glfw_wrapper;
 extern crate gl;
 
-use glfw_wrapper::InitHints;
+use glfw_wrapper::{ InitHints, WindowHints };
 
 fn main() {
     let glfw = glfw_wrapper::init(InitHints::default()).unwrap();
 
-    let window = glfw.create_window(800, 600, "Basic Example", None, None).unwrap();
+    let window = glfw.create_window(
+        &WindowHints::default(),
+        800, 600,
+        "Basic Example",
+        None, None
+    ).unwrap();
 
     unsafe {
         window.make_context_current().unwrap();
