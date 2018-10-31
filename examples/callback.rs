@@ -18,29 +18,22 @@ fn main() {
         gl::load_with(|s| glfw.get_proc_address(s).unwrap() as *const _);
     }
 
-    let mut col = ColorChanger(0);
+    let mut col = 0;
 
     while !window.should_close() {
         unsafe {
             gl::ClearColor(
-                (col.0 / 1 % 4) as f32 / 3.0,
-                (col.0 / 4 % 4) as f32 / 3.0,
-                (col.0 / 16 % 4) as f32 / 3.0,
+                (col / 1 % 4) as f32 / 3.0,
+                (col / 4 % 4) as f32 / 3.0,
+                (col / 16 % 4) as f32 / 3.0,
                 1.0
             );
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
         window.swap_buffers().unwrap();
-        with_callbacks(&[&window], &mut col, || glfw.poll_events().unwrap());
-    }
-}
-
-struct ColorChanger(i32);
-
-impl WindowCallbacks for ColorChanger {
-    fn mouse_button(&mut self, _: &Window, _: MouseButton, action: bool, _: Modifiers) {
-        if action {
-            self.0 += 1;
-        }
+        glfw.poll_events(&mut |e| match e {
+            Event::MouseButtonDown {..} => col += 1,
+            _ => {}
+        }).unwrap();
     }
 }

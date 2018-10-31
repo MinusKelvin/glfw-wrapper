@@ -24,6 +24,6 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
         window.swap_buffers().unwrap();
-        glfw.poll_events().unwrap();
+        glfw.poll_events(&mut |_| {}).unwrap();
     }
 }

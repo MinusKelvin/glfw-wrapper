@@ -2,16 +2,6 @@ use std::os::raw::{ c_int, c_uchar };
 use ffi;
 
 enum_from_primitive! {
-    #[repr(i32)]
-    #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-    pub enum Action {
-        Release = ffi::GLFW_RELEASE,
-        Press = ffi::GLFW_PRESS,
-        Repeat = ffi::GLFW_REPEAT
-    }
-}
-
-enum_from_primitive! {
     /// Named keys.
     /// 
     /// [GLFW Reference][glfw]

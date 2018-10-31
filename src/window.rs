@@ -1,6 +1,7 @@
 use std::ffi::CString;
 use std::ptr;
 use std::ops::Deref;
+use std::fmt;
 use std::hash::{ Hash, Hasher };
 
 use enum_primitive::FromPrimitive;
@@ -22,7 +23,7 @@ use CursorMode;
 use KeyCode;
 use MouseButton;
 use Cursor;
-use callbacks::*;
+use events::*;
 use util::*;
 use get_error;
 
@@ -30,6 +31,12 @@ pub struct Window<'a> {
     pub(crate) ptr: *mut ffi::GLFWwindow,
     shared: SharedWindow,
     glfw: Option<&'a Glfw>
+}
+
+impl<'a> fmt::Debug for Window<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Window {{ ... }}")
+    }
 }
 
 impl<'a> Drop for Window<'a> {
@@ -55,7 +62,7 @@ impl<'a> Hash for Window<'a> {
 
 impl<'a> Window<'a> {
     pub(crate) fn init(glfw: Option<&'a Glfw>, ptr: *mut ffi::GLFWwindow) -> Self {
-        init_callbacks(ptr);
+        init_window_callbacks(ptr);
         Window {
             ptr: ptr,
             shared: SharedWindow(ptr),

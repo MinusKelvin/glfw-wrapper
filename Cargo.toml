@@ -11,7 +11,6 @@ license = "MIT"
 [dependencies]
 enum_primitive = "0.1"
 bitflags = "1.0"
-scopeguard = "0.3"
 
 [dependencies.glfw-sys]
 git = "https://github.com/MinusKelvin/glfw-sys"

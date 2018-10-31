@@ -9,8 +9,6 @@
 extern crate enum_primitive;
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate scopeguard;
 
 #[cfg(all(
     any(feature = "expose-win32", feature = "expose-wgl"),
@@ -28,15 +26,16 @@ use std::sync::atomic::{ AtomicBool, ATOMIC_BOOL_INIT, Ordering };
 use std::sync::{ Arc, Weak, Mutex };
 use std::marker::PhantomData;
 use std::ptr;
-use std::cell::{ RefCell, Cell };
+use std::cell::RefCell;
 use std::slice;
 use std::ops::Deref;
 use std::os::raw::{ c_int, c_char };
+use std::mem;
 
 use enum_primitive::FromPrimitive;
 
 mod enums;
-mod callbacks;
+mod events;
 mod window;
 mod monitor;
 mod misc;
@@ -46,7 +45,7 @@ pub use window::*;
 pub use monitor::*;
 pub use misc::*;
 pub use ffi::GLFWglproc as GlProc;
-pub use callbacks::*;
+pub use events::*;
 
 mod ffi;
 mod util;
@@ -185,7 +184,7 @@ pub fn init(init_hints: InitHints) -> std::result::Result<Glfw, InitError> {
             );
         }
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
-            callbacks::monitor::initialize();
+            events::initialize_callbacks();
             Ok(Glfw {
                 shared: SharedGlfw(PhantomData),
                 destruction_locker: Arc::new(Mutex::new(true)),
@@ -202,7 +201,7 @@ pub fn init(init_hints: InitHints) -> std::result::Result<Glfw, InitError> {
 
 thread_local! {
     // The only things that can affect these live on the main thread
-    pub(crate) static PROCESSING_EVENTS: Cell<bool> = Cell::new(false);
+    // pub(crate) static PROCESSING_EVENTS: Cell<bool> = Cell::new(false);
     pub(crate) static REENTRANCE_AVOIDANCE: RefCell<Vec<ReentranceAvoidanceCommand>> =
             RefCell::new(Vec::new());
 }
@@ -243,7 +242,7 @@ impl Drop for Glfw {
 
 impl Glfw {
     pub(crate) fn destroy_window(&self, ptr: *mut ffi::GLFWwindow) {
-        PROCESSING_EVENTS.with(|v| if v.get() {
+        if unsafe { EVENT_PROCESSOR.is_some() } {
             use ReentranceAvoidanceCommand::DestroyWindow;
             REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(DestroyWindow(ptr)));
             // Delayed window destruction; it may be a while before an event processing call occurs
@@ -254,18 +253,18 @@ impl Glfw {
             unsafe {
                 ffi::glfwDestroyWindow(ptr);
             }
-        })
+        }
     }
 
     pub(crate) fn destroy_cursor(&self, ptr: *mut ffi::GLFWcursor) {
-        PROCESSING_EVENTS.with(|v| if v.get() {
+        if unsafe { EVENT_PROCESSOR.is_some() } {
             use ReentranceAvoidanceCommand::DestroyCursor;
             REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(DestroyCursor(ptr)))
         } else {
             unsafe {
                 ffi::glfwDestroyCursor(ptr);
             }
-        })
+        }
     }
 
     fn process_reentrance_avoidance(&self) {
@@ -415,12 +414,20 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga37bd57223967b4211d60ca1a0bf3c832
-    pub fn poll_events(&self) -> Result<()> {
-        PROCESSING_EVENTS.with(|v| if v.get() {
-            panic!("Call to non-rentrant function during event processing.");
-        });
-        self.process_reentrance_avoidance();
-        unsafe { ffi::glfwPollEvents() };
+    pub fn poll_events(&self, handler: &mut FnMut(Event)) -> Result<()> {
+        unsafe {
+            if EVENT_PROCESSOR.is_some() {
+                panic!("Call to non-rentrant function during event processing.");
+            }
+            // We need to extend the lifetime of the &mut FnMut(Event) to &mut (FnMut(Event) +
+            // 'static). That's what this transmute does. Yikes. We clear the pointer
+            // (EVENT_PROCESSOR = None) after we're done, so the lifetime extension shouldn't cause
+            // any problems.
+            let handler_ptr = mem::transmute(handler);
+            EVENT_PROCESSOR = Some(handler_ptr);
+            ffi::glfwPollEvents();
+            EVENT_PROCESSOR = None;
+        }
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -429,13 +436,20 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga554e37d781f0a997656c26b2c56c835e
-    pub fn wait_events(&self) -> Result<()> {
-        PROCESSING_EVENTS.with(|v| if v.get() {
-            panic!("Call to non-rentrant function during event processing.");
-        });
-        // Avoids blocking if the last window was dropped in a callback outside poll/wait events
-        self.process_reentrance_avoidance();
-        unsafe { ffi::glfwWaitEvents() };
+    pub fn wait_events(&self, handler: &mut FnMut(Event)) -> Result<()> {
+        unsafe {
+            if EVENT_PROCESSOR.is_some() {
+                panic!("Call to non-rentrant function during event processing.");
+            }
+            // We need to extend the lifetime of the &mut FnMut(Event) to &mut (FnMut(Event) +
+            // 'static). That's what this transmute does. Yikes. We clear the pointer
+            // (EVENT_PROCESSOR = None) after we're done, so the lifetime extension shouldn't cause
+            // any problems.
+            let handler_ptr = mem::transmute(handler);
+            EVENT_PROCESSOR = Some(handler_ptr);
+            ffi::glfwWaitEvents();
+            EVENT_PROCESSOR = None;
+        }
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -444,13 +458,20 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga605a178db92f1a7f1a925563ef3ea2cf
-    pub fn wait_events_timeout(&self, timeout: f64) -> Result<()> {
-        PROCESSING_EVENTS.with(|v| if v.get() {
-            panic!("Call to non-rentrant function during event processing.");
-        });
-        // Avoids blocking if the last window was dropped in a callback outside poll/wait events
-        self.process_reentrance_avoidance();
-        unsafe { ffi::glfwWaitEventsTimeout(timeout) };
+    pub fn wait_events_timeout(&self, timeout: f64, handler: &mut FnMut(Event)) -> Result<()> {
+        unsafe {
+            if EVENT_PROCESSOR.is_some() {
+                panic!("Call to non-rentrant function during event processing.");
+            }
+            // We need to extend the lifetime of the &mut FnMut(Event) to &mut (FnMut(Event) +
+            // 'static). That's what this transmute does. Yikes. We clear the pointer
+            // (EVENT_PROCESSOR = None) after we're done, so the lifetime extension shouldn't cause
+            // any problems.
+            let handler_ptr = mem::transmute(handler);
+            EVENT_PROCESSOR = Some(handler_ptr);
+            ffi::glfwWaitEventsTimeout(timeout);
+            EVENT_PROCESSOR = None;
+        }
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -478,20 +499,6 @@ impl Glfw {
         unsafe {
             ffi::glfwGetPrimaryMonitor().as_mut().map(|p| Monitor::create_from(p))
         }
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#gac3fe0f647f68b731f99756cd81897378
-    pub fn set_monitor_callback(&self, callback: Box<MonitorCallback>) {
-        callbacks::monitor::set(callback);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#gac3fe0f647f68b731f99756cd81897378
-    pub fn unset_monitor_callback(&self) {
-        callbacks::monitor::unset();
     }
 
     /// [GLFW Reference][glfw]
@@ -612,20 +619,6 @@ impl Glfw {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gad0f676860f329d80f7e47e9f06a96f00
     pub fn is_joystick_gamepad(&self, joystick: Joystick) -> bool {
         cint_to_bool(unsafe { ffi::glfwJoystickIsGamepad(joystick as i32) })
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gab1dc8379f1b82bb660a6b9c9fa06ca07
-    pub fn set_joystick_callback(&self, callback: Box<JoystickCallback>) {
-        joystick::set(callback);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gab1dc8379f1b82bb660a6b9c9fa06ca07
-    pub fn unset_joystick_callback(&self) {
-        joystick::unset();
     }
 
     /// [GLFW Reference][glfw]

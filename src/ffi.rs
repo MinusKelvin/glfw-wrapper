@@ -342,7 +342,7 @@ pub type GLFWcursorenterfun = extern "C" fn(*mut GLFWwindow,c_int);
 pub type GLFWscrollfun = extern "C" fn(*mut GLFWwindow,c_double,c_double);
 pub type GLFWkeyfun = extern "C" fn(*mut GLFWwindow,c_int,c_int,c_int,c_int);
 pub type GLFWcharfun = extern "C" fn(*mut GLFWwindow,c_uint);
-pub type GLFWcharmodsfun = extern "C" fn(*mut GLFWwindow,c_uint,c_int);
+#[allow(unused)] pub type GLFWcharmodsfun = extern "C" fn(*mut GLFWwindow,c_uint,c_int);
 pub type GLFWdropfun = extern "C" fn(*mut GLFWwindow,c_int,*const *const c_char);
 pub type GLFWmonitorfun = extern "C" fn(*mut GLFWmonitor,c_int);
 pub type GLFWjoystickfun = extern "C" fn(c_int,c_int);
@@ -440,8 +440,8 @@ extern "C" {
     pub fn glfwSetWindowMonitor(window: *mut GLFWwindow, monitor: *mut GLFWmonitor, xpos: c_int, ypos: c_int, width: c_int, height: c_int, refreshRate: c_int);
     pub fn glfwGetWindowAttrib(window: *mut GLFWwindow, attrib: c_int) -> c_int;
     pub fn glfwSetWindowAttrib(window: *mut GLFWwindow, attrib: c_int, value: c_int);
-    pub fn glfwSetWindowUserPointer(window: *mut GLFWwindow, pointer: *mut c_void);
-    pub fn glfwGetWindowUserPointer(window: *mut GLFWwindow) -> *mut c_void;
+    #[allow(unused)] pub fn glfwSetWindowUserPointer(window: *mut GLFWwindow, pointer: *mut c_void);
+    #[allow(unused)] pub fn glfwGetWindowUserPointer(window: *mut GLFWwindow) -> *mut c_void;
     pub fn glfwSetWindowPosCallback(window: *mut GLFWwindow, cbfun: Option<GLFWwindowposfun>) -> Option<GLFWwindowposfun>;
     pub fn glfwSetWindowSizeCallback(window: *mut GLFWwindow, cbfun: Option<GLFWwindowsizefun>) -> Option<GLFWwindowsizefun>;
     pub fn glfwSetWindowCloseCallback(window: *mut GLFWwindow, cbfun: Option<GLFWwindowclosefun>) -> Option<GLFWwindowclosefun>;
@@ -469,7 +469,7 @@ extern "C" {
     pub fn glfwSetCursor(window: *mut GLFWwindow, cursor: *mut GLFWcursor);
     pub fn glfwSetKeyCallback(window: *mut GLFWwindow, cbfun: Option<GLFWkeyfun>) -> Option<GLFWkeyfun>;
     pub fn glfwSetCharCallback(window: *mut GLFWwindow, cbfun: Option<GLFWcharfun>) -> Option<GLFWcharfun>;
-    pub fn glfwSetCharModsCallback(window: *mut GLFWwindow, cbfun: Option<GLFWcharmodsfun>) -> Option<GLFWcharmodsfun>;
+    #[allow(unused)] pub fn glfwSetCharModsCallback(window: *mut GLFWwindow, cbfun: Option<GLFWcharmodsfun>) -> Option<GLFWcharmodsfun>;
     pub fn glfwSetMouseButtonCallback(window: *mut GLFWwindow, cbfun: Option<GLFWmousebuttonfun>) -> Option<GLFWmousebuttonfun>;
     pub fn glfwSetCursorPosCallback(window: *mut GLFWwindow, cbfun: Option<GLFWcursorposfun>) -> Option<GLFWcursorposfun>;
     pub fn glfwSetCursorEnterCallback(window: *mut GLFWwindow, cbfun: Option<GLFWcursorenterfun>) -> Option<GLFWcursorenterfun>;
