@@ -25,6 +25,7 @@ extern crate scopeguard;
 use std::borrow::Cow;
 use std::ffi::{ CStr, CString };
 use std::sync::atomic::{ AtomicBool, ATOMIC_BOOL_INIT, Ordering };
+use std::sync::{ Arc, Weak, Mutex };
 use std::marker::PhantomData;
 use std::ptr;
 use std::cell::{ RefCell, Cell };
@@ -187,6 +188,7 @@ pub fn init(init_hints: InitHints) -> std::result::Result<Glfw, InitError> {
             callbacks::monitor::initialize();
             Ok(Glfw {
                 shared: SharedGlfw(PhantomData),
+                destruction_locker: Arc::new(Mutex::new(true)),
                 _phantom: PhantomData
             })
         } else {
@@ -215,6 +217,14 @@ enum ReentranceAvoidanceCommand {
 /// Only one of these can exist at any point in time. Terminates the GLFW library when dropped.
 pub struct Glfw {
     shared: SharedGlfw,
+    /// This field exists so that we can safely call `glfwPostEmptyEvent` from the [`GlfwNotifier`]
+    /// which must exist for the static lifetime. The `GlfwNotifier` struct upgrades a weak Arc,
+    /// then locks the mutex, makes sure it's `true` (glfw exists), then calls `glfwPostEmptyEvent`,
+    /// then unlocks and drops the strong Arc. The `Glfw` locks the mutex and sets it to `false`
+    /// before calling `glfwTerminate`.
+    /// 
+    /// [`GlfwNotifier`]: struct.GlfwNotifier.html
+    destruction_locker: Arc<Mutex<bool>>,
     _phantom: PhantomData<*const ()>
 }
 
@@ -222,6 +232,10 @@ impl Drop for Glfw {
     fn drop(&mut self) {
         self.process_reentrance_avoidance();
         invalidate_all_monitors();
+        if let Ok(mut lock) = self.destruction_locker.lock() {
+            use std::ops::DerefMut;
+            *lock.deref_mut() = false;
+        }
         unsafe { ffi::glfwTerminate() };
         INIT_STATE.store(false, Ordering::SeqCst);
     }
@@ -752,6 +766,38 @@ impl SharedGlfw {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga3289ee876572f6e91f06df3a24824443
     pub fn get_timer_frequency(&self) -> u64 {
         unsafe { ffi::glfwGetTimerFrequency() }
+    }
+}
+
+#[derive(Debug)]
+pub enum NotifierError {
+    Terminated,
+    Glfw(Error)
+}
+
+/// Allows you to wake up the event loop through an object with a static lifetime.
+/// 
+/// Exists because of the way WebRender's `RenderNotifier` works.
+#[derive(Clone)]
+pub struct GlfwNotifier(Weak<Mutex<bool>>);
+
+impl GlfwNotifier {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab5997a25187e9fd5c6f2ecbbc8dfd7e9
+    pub fn post_empty_event(&self) -> std::result::Result<(), NotifierError> {
+        if let Some(arc) = self.0.upgrade() {
+            if let Ok(lock) = arc.lock() {
+                use std::ops::Deref;
+                if *lock.deref() {
+                    unsafe {
+                        ffi::glfwPostEmptyEvent();
+                    }
+                    return get_error().map_err(|e| NotifierError::Glfw(e));
+                }
+            }
+        }
+        Err(NotifierError::Terminated)
     }
 }
 
