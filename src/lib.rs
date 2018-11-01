@@ -1,9 +1,14 @@
+//! A safe Rust wrapper around the [GLFW] library.
+//! 
+//! See [the repository] for examples.
+//! 
+//! [GLFW]: http://www.glfw.org/
+//! [the repository]: https://github.com/MinusKelvin/glfw-wrapper
+
 #[macro_use]
 extern crate enum_primitive;
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate scopeguard;
 
 #[cfg(all(
     any(feature = "expose-win32", feature = "expose-wgl"),
@@ -18,17 +23,19 @@ extern crate scopeguard;
 use std::borrow::Cow;
 use std::ffi::{ CStr, CString };
 use std::sync::atomic::{ AtomicBool, ATOMIC_BOOL_INIT, Ordering };
+use std::sync::{ Arc, Weak, Mutex };
 use std::marker::PhantomData;
 use std::ptr;
-use std::cell::{ RefCell, Cell };
+use std::cell::RefCell;
 use std::slice;
 use std::ops::Deref;
 use std::os::raw::{ c_int, c_char };
+use std::mem;
 
 use enum_primitive::FromPrimitive;
 
 mod enums;
-mod callbacks;
+mod events;
 mod window;
 mod monitor;
 mod misc;
@@ -37,36 +44,46 @@ pub use enums::*;
 pub use window::*;
 pub use monitor::*;
 pub use misc::*;
-pub use ffi::{
-    GLFW_VERSION_MAJOR as VERSION_MAJOR,
-    GLFW_VERSION_MINOR as VERSION_MINOR,
-    GLFW_VERSION_REVISION as VERSION_REVISION,
-    GLFWglproc as GlProc
-};
-pub use callbacks::*;
+pub use ffi::GLFWglproc as GlProc;
+pub use events::*;
 
 mod ffi;
 mod util;
 
 use util::*;
 
+pub const VERSION: (i32, i32, i32) =
+        (ffi::GLFW_VERSION_MAJOR, ffi::GLFW_VERSION_MINOR, ffi::GLFW_VERSION_REVISION);
+
+/// Represents a GLFW error.
 #[derive(Debug)]
 pub struct Error {
     pub kind: ErrorKind,
     pub description: String
 }
 
+/// Specialized `Result` type for GLFW errors.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Retrieves the runtime version of GLFW.
+/// 
+/// This may differ from the [`VERSION`] constant, as that represents the version compiled against.
+/// This functions is intended for checking that GLFW is at least a minimum required version when
+/// linked to GLFW as a shared library.
+/// 
 /// [GLFW Reference][glfw]
 /// 
 /// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga9f8ffaacf3c269cc48eafbf8b9b71197
+/// [`VERSION`]: constant.VERSION.html
 pub fn get_version() -> (i32, i32, i32) {
     let mut triplet = (0, 0, 0);
     unsafe { ffi::glfwGetVersion(&mut triplet.0, &mut triplet.1, &mut triplet.2) };
     triplet
 }
 
+/// Retrieves a string describing the version, platform, compiler, and platform-specific
+/// compile-time options used to compile GLFW.
+/// 
 /// [GLFW Reference][glfw]
 /// 
 /// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga23d47dc013fce2bf58036da66079a657
@@ -74,11 +91,13 @@ pub fn get_version_string() -> Cow<'static, str> {
     unsafe { CStr::from_ptr(ffi::glfwGetVersionString()) }.to_string_lossy()
 }
 
-/// [GLFW Reference][glfw]
+/// Retrieves and clears the last GLFW error that occured on the calling thread.
 /// 
 /// Currently, all functions that the documentation says could result in errors other than
 /// `GLFW_NOT_INITIALIZED` and `GLFW_INVALID_ENUM` return a result obtained from calling this
 /// function, clearing the error. Until this changes, this function should always return `Ok`.
+/// 
+/// [GLFW Reference][glfw]
 /// 
 /// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga944986b4ec0b928d488141f92982aa18
 pub fn get_error() -> Result<()> {
@@ -98,27 +117,50 @@ pub fn get_error() -> Result<()> {
 }
 
 /// Tracks the initialization state of the GLFW library.
+/// 
 /// * `false` represents uninitialized
 /// * `true` represents initialized
-/// If a [`Context`] exists, this will be `true`.
+/// 
+/// If a [`Glfw`] exists, this will be `true`.
+/// 
+/// [`Glfw`]: struct.Glfw.html
 static INIT_STATE: AtomicBool = ATOMIC_BOOL_INIT;
 
-/// Initialize the GLFW library. [GLFW Reference][glfw]
+#[derive(Debug)]
+pub enum InitError {
+    AlreadyInitialized,
+    Failed(Error)
+}
+
+/// Initializes GLFW.
+/// 
+/// Calls to this function while a [`Glfw`] instance exists results in an
+/// `Err(InitError::AlreadyInitialized)`.
 /// 
 /// This function must be called on the first thread of the process, at least on Mac OS. All of the
 /// restrictions about what can and can't be done from the main thread should be encoded in the type
 /// system.
 /// 
-/// # Returns
+/// # Deviations from GLFW
 /// 
-/// * `Ok(Some(_))` if no context already exists
-/// * `Ok(None)` if a context already exists
-/// * `Err(_)` if an error occured during initialization
+/// Instead of setting initialization hints through a separate (stateful) function, this function
+/// takes an [`InitHints`] and doubles as `glfwInitHint`. We do this because `glfwInitHint` must
+/// only be called from the main thread, and we cannot enforce that without an instance of a type
+/// that can only live on the main thread. This design is also preferred because it eliminates some
+/// hidden state.
 /// 
-/// [glfw]: http://www.glfw.org/docs/3.3/group__init.html#ga317aac130a235ab08c6db0834907d85e
-pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
+/// # See Also
+/// 
+/// * [`glfwInit()`]
+/// * [`glfwInitHint()`]
+/// 
+/// [`Glfw`]: struct.Glfw.html
+/// [`InitHints`]: struct.InitHints.html
+/// [`glfwInit()`]: http://www.glfw.org/docs/3.3/group__init.html#ga317aac130a235ab08c6db0834907d85e
+/// [`glfwInitHint()`]: http://www.glfw.org/docs/3.3/group__init.html#ga110fd1d3f0412822b4f1908c026f724a
+pub fn init(init_hints: InitHints) -> std::result::Result<Glfw, InitError> {
     extern "C" fn err_cb(code: c_int, _: *const c_char) {
-        if let Some(_) = ErrorKind::from_i32(code) { return }
+        if ErrorKind::from_i32(code).is_some() { return }
         eprintln!("{} error occured. This should not be possible.", match code {
             ffi::GLFW_NOT_INITIALIZED => "GLFW_NOT_INITIALIZED",
             ffi::GLFW_INVALID_ENUM => "GLFW_INVALID_ENUM",
@@ -129,38 +171,37 @@ pub fn init(init_hints: &[InitHint]) -> Result<Option<Glfw>> {
     }
 
     if INIT_STATE.swap(true, Ordering::SeqCst) == false {
-        unsafe { ffi::glfwSetErrorCallback(Some(err_cb)) };
-        for hint in init_hints {
-            match hint {
-                InitHint::CocoaChDirResources(enable) => unsafe {
-                    ffi::glfwInitHint(ffi::GLFW_COCOA_CHDIR_RESOURCES, bool_to_cint(*enable))
-                }
-                InitHint::CocoaMenubar(enable) => unsafe {
-                    ffi::glfwInitHint(ffi::GLFW_COCOA_MENUBAR, bool_to_cint(*enable))
-                }
-                InitHint::JoystickHatButtons(enable) => unsafe {
-                    ffi::glfwInitHint(ffi::GLFW_JOYSTICK_HAT_BUTTONS, bool_to_cint(*enable))
-                }
-            }
+        unsafe {
+            ffi::glfwSetErrorCallback(Some(err_cb));
+            ffi::glfwInitHint(
+                ffi::GLFW_COCOA_CHDIR_RESOURCES,
+                bool_to_cint(init_hints.cocoa_chdir_resources)
+            );
+            ffi::glfwInitHint(ffi::GLFW_COCOA_MENUBAR, bool_to_cint(init_hints.cocoa_menubar));
+            ffi::glfwInitHint(
+                ffi::GLFW_JOYSTICK_HAT_BUTTONS,
+                bool_to_cint(init_hints.joystick_hat_buttons)
+            );
         }
         if cint_to_bool(unsafe { ffi::glfwInit() }) {
-            callbacks::monitor::initialize();
-            Ok(Some(Glfw {
+            events::initialize_callbacks();
+            Ok(Glfw {
                 shared: SharedGlfw(PhantomData),
+                destruction_locker: Arc::new(Mutex::new(true)),
                 _phantom: PhantomData
-            }))
+            })
         } else {
             INIT_STATE.store(false, Ordering::SeqCst);
-            Err(get_error().unwrap_err())
+            Err(InitError::Failed(get_error().unwrap_err()))
         }
     } else {
-        Ok(None)
+        Err(InitError::AlreadyInitialized)
     }
 }
 
 thread_local! {
     // The only things that can affect these live on the main thread
-    pub(crate) static PROCESSING_EVENTS: Cell<bool> = Cell::new(false);
+    // pub(crate) static PROCESSING_EVENTS: Cell<bool> = Cell::new(false);
     pub(crate) static REENTRANCE_AVOIDANCE: RefCell<Vec<ReentranceAvoidanceCommand>> =
             RefCell::new(Vec::new());
 }
@@ -171,8 +212,18 @@ enum ReentranceAvoidanceCommand {
 }
 
 /// Represents ownership of the GLFW library.
+/// 
+/// Only one of these can exist at any point in time. Terminates the GLFW library when dropped.
 pub struct Glfw {
     shared: SharedGlfw,
+    /// This field exists so that we can safely call `glfwPostEmptyEvent` from the [`GlfwNotifier`]
+    /// which must exist for the static lifetime. The `GlfwNotifier` struct upgrades a weak Arc,
+    /// then locks the mutex, makes sure it's `true` (glfw exists), then calls `glfwPostEmptyEvent`,
+    /// then unlocks and drops the strong Arc. The `Glfw` locks the mutex and sets it to `false`
+    /// before calling `glfwTerminate`.
+    /// 
+    /// [`GlfwNotifier`]: struct.GlfwNotifier.html
+    destruction_locker: Arc<Mutex<bool>>,
     _phantom: PhantomData<*const ()>
 }
 
@@ -180,6 +231,10 @@ impl Drop for Glfw {
     fn drop(&mut self) {
         self.process_reentrance_avoidance();
         invalidate_all_monitors();
+        if let Ok(mut lock) = self.destruction_locker.lock() {
+            use std::ops::DerefMut;
+            *lock.deref_mut() = false;
+        }
         unsafe { ffi::glfwTerminate() };
         INIT_STATE.store(false, Ordering::SeqCst);
     }
@@ -187,7 +242,7 @@ impl Drop for Glfw {
 
 impl Glfw {
     pub(crate) fn destroy_window(&self, ptr: *mut ffi::GLFWwindow) {
-        PROCESSING_EVENTS.with(|v| if v.get() {
+        if unsafe { EVENT_PROCESSOR.is_some() } {
             use ReentranceAvoidanceCommand::DestroyWindow;
             REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(DestroyWindow(ptr)));
             // Delayed window destruction; it may be a while before an event processing call occurs
@@ -198,18 +253,18 @@ impl Glfw {
             unsafe {
                 ffi::glfwDestroyWindow(ptr);
             }
-        })
+        }
     }
 
     pub(crate) fn destroy_cursor(&self, ptr: *mut ffi::GLFWcursor) {
-        PROCESSING_EVENTS.with(|v| if v.get() {
+        if unsafe { EVENT_PROCESSOR.is_some() } {
             use ReentranceAvoidanceCommand::DestroyCursor;
             REENTRANCE_AVOIDANCE.with(|v| v.borrow_mut().push(DestroyCursor(ptr)))
         } else {
             unsafe {
                 ffi::glfwDestroyCursor(ptr);
             }
-        })
+        }
     }
 
     fn process_reentrance_avoidance(&self) {
@@ -230,96 +285,118 @@ impl Glfw {
         &self.shared
     }
 
-    /// [GLFW Reference][glfw]
+    /// Creates a window and its associated OpenGL or OpenGL ES context.
     /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gaa77c4898dfb83344a6b4f76aa16b9a4a
-    pub fn default_window_hints(&self) {
-        unsafe { ffi::glfwDefaultWindowHints() };
-    }
-
-    /// [GLFW Reference][glfw]
+    /// This function does not change what context is current. To make the context for this window
+    /// current, call [`make_context_current()`].
     /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga7d9c8c62384b1e2821c4dc48952d2033
-    pub fn window_hint<'b>(&self, hint: WindowHint<'b>) {
-        use WindowHint::*;
-        unsafe { match hint {
-            Resizable(v) =>    ffi::glfwWindowHint(ffi::GLFW_RESIZABLE,     bool_to_cint(v)),
-            Visible(v) =>      ffi::glfwWindowHint(ffi::GLFW_VISIBLE,       bool_to_cint(v)),
-            Decorated(v) =>    ffi::glfwWindowHint(ffi::GLFW_DECORATED,     bool_to_cint(v)),
-            Focused(v) =>      ffi::glfwWindowHint(ffi::GLFW_FOCUSED,       bool_to_cint(v)),
-            AutoIconify(v) =>  ffi::glfwWindowHint(ffi::GLFW_AUTO_ICONIFY,  bool_to_cint(v)),
-            Floating(v) =>     ffi::glfwWindowHint(ffi::GLFW_FLOATING,      bool_to_cint(v)),
-            Maximized(v) =>    ffi::glfwWindowHint(ffi::GLFW_MAXIMIZED,     bool_to_cint(v)),
-            CenterCursor(v) => ffi::glfwWindowHint(ffi::GLFW_CENTER_CURSOR, bool_to_cint(v)),
-            Stereo(v) =>       ffi::glfwWindowHint(ffi::GLFW_STEREO,        bool_to_cint(v)),
-            SrgbCapable(v) =>  ffi::glfwWindowHint(ffi::GLFW_SRGB_CAPABLE,  bool_to_cint(v)),
-            DoubleBuffer(v) => ffi::glfwWindowHint(ffi::GLFW_DOUBLEBUFFER,  bool_to_cint(v)),
-            TransparentFramebuffer(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_TRANSPARENT_FRAMEBUFFER, bool_to_cint(v)),
-
-            RedBits(v) =>        ffi::glfwWindowHint(ffi::GLFW_RED_BITS,         v.or_dont_care()),
-            GreenBits(v) =>      ffi::glfwWindowHint(ffi::GLFW_GREEN_BITS,       v.or_dont_care()),
-            BlueBits(v) =>       ffi::glfwWindowHint(ffi::GLFW_BLUE_BITS,        v.or_dont_care()),
-            AlphaBits(v) =>      ffi::glfwWindowHint(ffi::GLFW_ALPHA_BITS,       v.or_dont_care()),
-            DepthBits(v) =>      ffi::glfwWindowHint(ffi::GLFW_DEPTH_BITS,       v.or_dont_care()),
-            StencilBits(v) =>    ffi::glfwWindowHint(ffi::GLFW_STENCIL_BITS,     v.or_dont_care()),
-            AccumRedBits(v) =>   ffi::glfwWindowHint(ffi::GLFW_ACCUM_RED_BITS,   v.or_dont_care()),
-            AccumGreenBits(v) => ffi::glfwWindowHint(ffi::GLFW_ACCUM_GREEN_BITS, v.or_dont_care()),
-            AccumBlueBits(v) =>  ffi::glfwWindowHint(ffi::GLFW_ACCUM_BLUE_BITS,  v.or_dont_care()),
-            AccumAlphaBits(v) => ffi::glfwWindowHint(ffi::GLFW_ACCUM_ALPHA_BITS, v.or_dont_care()),
-
-            AuxiliaryBuffers(v) => ffi::glfwWindowHint(ffi::GLFW_AUX_BUFFERS,  v.or_dont_care()),
-            Samples(v) =>          ffi::glfwWindowHint(ffi::GLFW_SAMPLES,      v.or_dont_care()),
-            RefreshRate(v) =>      ffi::glfwWindowHint(ffi::GLFW_REFRESH_RATE, v.or_dont_care()),
-
-            ClientApi(v) =>          ffi::glfwWindowHint(ffi::GLFW_CLIENT_API,           v as i32),
-            ContextCreationApi(v) => ffi::glfwWindowHint(ffi::GLFW_CONTEXT_CREATION_API, v as i32),
-            ContextRobustness(v) =>  ffi::glfwWindowHint(ffi::GLFW_CONTEXT_ROBUSTNESS,   v as i32),
-            OpenGlProfile(v) =>      ffi::glfwWindowHint(ffi::GLFW_OPENGL_PROFILE,       v as i32),
-            ContextReleaseBehavior(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_CONTEXT_RELEASE_BEHAVIOR, v as i32),
-
-            ContextVersionMajor(v) => ffi::glfwWindowHint(ffi::GLFW_CONTEXT_VERSION_MAJOR, v),
-            ContextVersionMinor(v) => ffi::glfwWindowHint(ffi::GLFW_CONTEXT_VERSION_MINOR, v),
-
-            OpenGlForwardCompat(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_OPENGL_FORWARD_COMPAT, bool_to_cint(v)),
-            OpenGlDebugContext(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_OPENGL_DEBUG_CONTEXT, bool_to_cint(v)),
-            ContextNoError(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_CONTEXT_NO_ERROR, bool_to_cint(v)),
-
-            CocoaRetinaFramebuffer(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_COCOA_RETINA_FRAMEBUFFER, bool_to_cint(v)),
-            CocoaGraphicsSwitching(v) =>
-                    ffi::glfwWindowHint(ffi::GLFW_COCOA_GRAPHICS_SWITCHING, bool_to_cint(v)),
-            CocoaFrameName(v) => {
-                let cstr = CString::new(v).unwrap();
-                ffi::glfwWindowHintString(ffi::GLFW_COCOA_FRAME_NAME, cstr.as_ptr())
-            }
-
-            X11ClassName(v) => {
-                let cstr = CString::new(v).unwrap();
-                ffi::glfwWindowHintString(ffi::GLFW_X11_CLASS_NAME, cstr.as_ptr())
-            }
-            X11InstanceName(v) => {
-                let cstr = CString::new(v).unwrap();
-                ffi::glfwWindowHintString(ffi::GLFW_X11_INSTANCE_NAME, cstr.as_ptr())
-            }
-        } }
-    }
-
-    /// [GLFW Reference][glfw]
+    /// The created OpenGL or OpenGL ES context can optionally be shared with another window's
+    /// context. For more information, see the [GLFW Reference][share].
+    /// 
+    /// The created window, framebuffer, and context may not match what you requested, as some not
+    /// all window hints are hard constraints. See the [`WindowHints`] struct for more details. Use
+    /// the relevant window querying functions to obtain the actual configuration.
+    /// 
+    /// To create a fullscreen window, specify the monitor to create it on; it will be windowed mode
+    /// otherwise. It is recommended that you pick the primary monitor. For fullscreen windows, the
+    /// specified size becomes the resolution of the window's desired video mode. If the closest
+    /// available match to the window's desired video mode is the current one, GLFW will create a
+    /// "windowed fullscreen" or "borderless fullscreen" window. For more information, see the
+    /// [GLFW Reference][window-full].
+    /// 
+    /// # Deviations from GLFW
+    /// 
+    /// Instead of setting window hints through a separate (stateful) function, this function takes
+    /// a [`WindowHints`] and doubles as `glfwWindowHint` and `glfwWindowHintString`. This was done
+    /// to match our API for [`init()`] and because this design eliminates some hidden state.
+    /// 
+    /// # See Also
+    /// 
+    /// * [`glfwCreateWindow()`][glfw]
+    /// * [Window Creation Guide]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga5c336fddf2cbb5b92f65f10fb6043344
+    /// [share]: http://www.glfw.org/docs/3.3/context_guide.html#context_sharing
+    /// [window-full]: http://www.glfw.org/docs/3.3/window_guide.html#window_windowed_full_screen
+    /// [Window Creation Guide]: http://www.glfw.org/docs/3.3/window_guide.html#window_creation
+    /// [`make_context_current()`]: struct.Window.html#method.make_context_current
+    /// [`WindowHints`]: struct.WindowHints.html
+    /// [`init()`]: fn.init.html
     pub fn create_window(
         &self,
+        window_hints: &WindowHints,
         width: i32,
         height: i32,
         title: &str,
         monitor: Option<Monitor>,
         share: Option<&Window>
     ) -> Result<Window> {
+        unsafe {
+            ffi::glfwWindowHint(ffi::GLFW_RESIZABLE,     bool_to_cint(window_hints.resizable));
+            ffi::glfwWindowHint(ffi::GLFW_VISIBLE,       bool_to_cint(window_hints.visible));
+            ffi::glfwWindowHint(ffi::GLFW_DECORATED,     bool_to_cint(window_hints.decorated));
+            ffi::glfwWindowHint(ffi::GLFW_FOCUSED,       bool_to_cint(window_hints.focused));
+            ffi::glfwWindowHint(ffi::GLFW_AUTO_ICONIFY,  bool_to_cint(window_hints.auto_iconify));
+            ffi::glfwWindowHint(ffi::GLFW_FLOATING,      bool_to_cint(window_hints.floating));
+            ffi::glfwWindowHint(ffi::GLFW_MAXIMIZED,     bool_to_cint(window_hints.maximized));
+            ffi::glfwWindowHint(ffi::GLFW_CENTER_CURSOR, bool_to_cint(window_hints.center_cursor));
+            ffi::glfwWindowHint(ffi::GLFW_STEREO,        bool_to_cint(window_hints.stereo));
+            ffi::glfwWindowHint(ffi::GLFW_SRGB_CAPABLE,  bool_to_cint(window_hints.srgb_capable));
+            ffi::glfwWindowHint(ffi::GLFW_DOUBLEBUFFER,  bool_to_cint(window_hints.double_buffer));
+            ffi::glfwWindowHint(ffi::GLFW_TRANSPARENT_FRAMEBUFFER,
+                    bool_to_cint(window_hints.transparent_framebuffer));
+
+            ffi::glfwWindowHint(ffi::GLFW_RED_BITS,     window_hints.red_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_GREEN_BITS,   window_hints.green_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_BLUE_BITS,    window_hints.blue_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_ALPHA_BITS,   window_hints.alpha_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_DEPTH_BITS,   window_hints.depth_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_STENCIL_BITS, window_hints.stencil_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_ACCUM_RED_BITS,
+                    window_hints.accum_red_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_ACCUM_GREEN_BITS,
+                    window_hints.accum_green_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_ACCUM_BLUE_BITS,
+                    window_hints.accum_blue_bits.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_ACCUM_ALPHA_BITS,
+                    window_hints.accum_alpha_bits.or_dont_care());
+
+            ffi::glfwWindowHint(ffi::GLFW_AUX_BUFFERS,
+                    window_hints.auxiliary_buffers.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_SAMPLES, window_hints.samples.or_dont_care());
+            ffi::glfwWindowHint(ffi::GLFW_REFRESH_RATE, window_hints.refresh_rate.or_dont_care());
+
+            ffi::glfwWindowHint(ffi::GLFW_CLIENT_API, window_hints.client_api as i32);
+            ffi::glfwWindowHint(ffi::GLFW_CONTEXT_CREATION_API,
+                    window_hints.context_creation_api as i32);
+            ffi::glfwWindowHint(ffi::GLFW_CONTEXT_ROBUSTNESS,
+                    window_hints.context_robustness as i32);
+            ffi::glfwWindowHint(ffi::GLFW_OPENGL_PROFILE, window_hints.opengl_profile as i32);
+            ffi::glfwWindowHint(ffi::GLFW_CONTEXT_RELEASE_BEHAVIOR,
+                    window_hints.context_release_behavior as i32);
+
+            ffi::glfwWindowHint(ffi::GLFW_CONTEXT_VERSION_MAJOR, window_hints.context_version.0);
+            ffi::glfwWindowHint(ffi::GLFW_CONTEXT_VERSION_MINOR, window_hints.context_version.1);
+
+            ffi::glfwWindowHint(ffi::GLFW_OPENGL_FORWARD_COMPAT,
+                    bool_to_cint(window_hints.opengl_forward_compatible));
+            ffi::glfwWindowHint(ffi::GLFW_OPENGL_DEBUG_CONTEXT,
+                    bool_to_cint(window_hints.opengl_debug_context));
+            ffi::glfwWindowHint(ffi::GLFW_CONTEXT_NO_ERROR,
+                    bool_to_cint(window_hints.context_no_error));
+
+            ffi::glfwWindowHint(ffi::GLFW_COCOA_RETINA_FRAMEBUFFER,
+                    bool_to_cint(window_hints.cocoa_retina_framebuffer));
+            ffi::glfwWindowHint(ffi::GLFW_COCOA_GRAPHICS_SWITCHING,
+                    bool_to_cint(window_hints.cocoa_graphics_switching));
+            let cstr = CString::new(window_hints.cocoa_frame_name).unwrap();
+            ffi::glfwWindowHintString(ffi::GLFW_COCOA_FRAME_NAME, cstr.as_ptr());
+
+            let cstr = CString::new(window_hints.x11_class_name).unwrap();
+            ffi::glfwWindowHintString(ffi::GLFW_X11_CLASS_NAME, cstr.as_ptr());
+            let cstr = CString::new(window_hints.x11_instance_name).unwrap();
+            ffi::glfwWindowHintString(ffi::GLFW_X11_INSTANCE_NAME, cstr.as_ptr());
+        }
         let title = CString::new(title).unwrap();
         let ptr = unsafe { ffi::glfwCreateWindow(
             width,
@@ -337,12 +414,20 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga37bd57223967b4211d60ca1a0bf3c832
-    pub fn poll_events(&self) -> Result<()> {
-        PROCESSING_EVENTS.with(|v| if v.get() {
-            panic!("Call to non-rentrant function during event processing.");
-        });
-        self.process_reentrance_avoidance();
-        unsafe { ffi::glfwPollEvents() };
+    pub fn poll_events(&self, handler: &mut FnMut(Event)) -> Result<()> {
+        unsafe {
+            if EVENT_PROCESSOR.is_some() {
+                panic!("Call to non-rentrant function during event processing.");
+            }
+            // We need to extend the lifetime of the &mut FnMut(Event) to &mut (FnMut(Event) +
+            // 'static). That's what this transmute does. Yikes. We clear the pointer
+            // (EVENT_PROCESSOR = None) after we're done, so the lifetime extension shouldn't cause
+            // any problems.
+            let handler_ptr = mem::transmute(handler);
+            EVENT_PROCESSOR = Some(handler_ptr);
+            ffi::glfwPollEvents();
+            EVENT_PROCESSOR = None;
+        }
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -351,13 +436,20 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga554e37d781f0a997656c26b2c56c835e
-    pub fn wait_events(&self) -> Result<()> {
-        PROCESSING_EVENTS.with(|v| if v.get() {
-            panic!("Call to non-rentrant function during event processing.");
-        });
-        // Avoids blocking if the last window was dropped in a callback outside poll/wait events
-        self.process_reentrance_avoidance();
-        unsafe { ffi::glfwWaitEvents() };
+    pub fn wait_events(&self, handler: &mut FnMut(Event)) -> Result<()> {
+        unsafe {
+            if EVENT_PROCESSOR.is_some() {
+                panic!("Call to non-rentrant function during event processing.");
+            }
+            // We need to extend the lifetime of the &mut FnMut(Event) to &mut (FnMut(Event) +
+            // 'static). That's what this transmute does. Yikes. We clear the pointer
+            // (EVENT_PROCESSOR = None) after we're done, so the lifetime extension shouldn't cause
+            // any problems.
+            let handler_ptr = mem::transmute(handler);
+            EVENT_PROCESSOR = Some(handler_ptr);
+            ffi::glfwWaitEvents();
+            EVENT_PROCESSOR = None;
+        }
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -366,13 +458,20 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#ga605a178db92f1a7f1a925563ef3ea2cf
-    pub fn wait_events_timeout(&self, timeout: f64) -> Result<()> {
-        PROCESSING_EVENTS.with(|v| if v.get() {
-            panic!("Call to non-rentrant function during event processing.");
-        });
-        // Avoids blocking if the last window was dropped in a callback outside poll/wait events
-        self.process_reentrance_avoidance();
-        unsafe { ffi::glfwWaitEventsTimeout(timeout) };
+    pub fn wait_events_timeout(&self, timeout: f64, handler: &mut FnMut(Event)) -> Result<()> {
+        unsafe {
+            if EVENT_PROCESSOR.is_some() {
+                panic!("Call to non-rentrant function during event processing.");
+            }
+            // We need to extend the lifetime of the &mut FnMut(Event) to &mut (FnMut(Event) +
+            // 'static). That's what this transmute does. Yikes. We clear the pointer
+            // (EVENT_PROCESSOR = None) after we're done, so the lifetime extension shouldn't cause
+            // any problems.
+            let handler_ptr = mem::transmute(handler);
+            EVENT_PROCESSOR = Some(handler_ptr);
+            ffi::glfwWaitEventsTimeout(timeout);
+            EVENT_PROCESSOR = None;
+        }
         let e = get_error();
         self.process_reentrance_avoidance();
         e
@@ -404,25 +503,11 @@ impl Glfw {
 
     /// [GLFW Reference][glfw]
     /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#gac3fe0f647f68b731f99756cd81897378
-    pub fn set_monitor_callback(&self, callback: Box<MonitorCallback>) {
-        callbacks::monitor::set(callback);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__monitor.html#gac3fe0f647f68b731f99756cd81897378
-    pub fn unset_monitor_callback(&self) {
-        callbacks::monitor::unset();
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga237a182e5ec0b21ce64543f3b5e7e2be
     pub fn get_key_name(&self, key: Key) -> Result<Option<String>> {
         let ptr = unsafe { match key {
-            Key::Known(kc) => ffi::glfwGetKeyName(kc as i32, 0),
-            Key::Unknown(sc) => ffi::glfwGetKeyName(ffi::GLFW_KEY_UNKNOWN, sc)
+            Key::Named(kc) => ffi::glfwGetKeyName(kc as i32, 0),
+            Key::Unnamed(sc) => ffi::glfwGetKeyName(ffi::GLFW_KEY_UNKNOWN, sc)
         } };
         get_error().map(|_| unsafe {
             ptr.as_ref().map(|p| CStr::from_ptr(p).to_string_lossy().into_owned())
@@ -500,12 +585,12 @@ impl Glfw {
     /// [GLFW Reference][glfw]
     /// 
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga2d8d0634bb81c180899aeb07477a67ea
-    pub fn get_joystick_hats(&self, joystick: Joystick) -> Result<Option<Vec<JoystickHat>>> {
+    pub fn get_joystick_hats(&self, joystick: Joystick) -> Result<Option<Vec<JoystickHatState>>> {
         let mut count = 0;
         let ptr = unsafe { ffi::glfwGetJoystickHats(joystick as i32, &mut count) };
         get_error().map(|_| unsafe {
             ptr.as_ref().map(|p| slice::from_raw_parts(p, count as usize)
-                    .iter().map(|c| JoystickHat::from_bits(*c).unwrap()).collect())
+                    .iter().map(|c| JoystickHatState::from_bits(*c).unwrap()).collect())
         })
     }
 
@@ -534,20 +619,6 @@ impl Glfw {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gad0f676860f329d80f7e47e9f06a96f00
     pub fn is_joystick_gamepad(&self, joystick: Joystick) -> bool {
         cint_to_bool(unsafe { ffi::glfwJoystickIsGamepad(joystick as i32) })
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gab1dc8379f1b82bb660a6b9c9fa06ca07
-    pub fn set_joystick_callback(&self, callback: Box<JoystickCallback>) {
-        joystick::set(callback);
-    }
-
-    /// [GLFW Reference][glfw]
-    /// 
-    /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#gab1dc8379f1b82bb660a6b9c9fa06ca07
-    pub fn unset_joystick_callback(&self) {
-        joystick::unset();
     }
 
     /// [GLFW Reference][glfw]
@@ -611,6 +682,10 @@ impl Deref for Glfw {
 }
 
 /// Encapsulates GLFW library calls that can be called from any thread.
+/// 
+/// Can only be obtained from [`Glfw::shared()`].
+/// 
+/// [`Glfw::shared()`]: struct.Glfw.html#method.shared
 pub struct SharedGlfw(PhantomData<*const ()>);
 unsafe impl Sync for SharedGlfw {}
 
@@ -684,6 +759,38 @@ impl SharedGlfw {
     /// [glfw]: http://www.glfw.org/docs/3.3/group__input.html#ga3289ee876572f6e91f06df3a24824443
     pub fn get_timer_frequency(&self) -> u64 {
         unsafe { ffi::glfwGetTimerFrequency() }
+    }
+}
+
+#[derive(Debug)]
+pub enum NotifierError {
+    Terminated,
+    Glfw(Error)
+}
+
+/// Allows you to wake up the event loop through an object with a static lifetime.
+/// 
+/// Exists because of the way WebRender's `RenderNotifier` works.
+#[derive(Clone)]
+pub struct GlfwNotifier(Weak<Mutex<bool>>);
+
+impl GlfwNotifier {
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: http://www.glfw.org/docs/3.3/group__window.html#gab5997a25187e9fd5c6f2ecbbc8dfd7e9
+    pub fn post_empty_event(&self) -> std::result::Result<(), NotifierError> {
+        if let Some(arc) = self.0.upgrade() {
+            if let Ok(lock) = arc.lock() {
+                use std::ops::Deref;
+                if *lock.deref() {
+                    unsafe {
+                        ffi::glfwPostEmptyEvent();
+                    }
+                    return get_error().map_err(|e| NotifierError::Glfw(e));
+                }
+            }
+        }
+        Err(NotifierError::Terminated)
     }
 }
 

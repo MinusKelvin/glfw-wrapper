@@ -11,14 +11,19 @@ license = "MIT"
 [dependencies]
 enum_primitive = "0.1"
 bitflags = "1.0"
-scopeguard = "0.3"
 
 [dependencies.glfw-sys]
 git = "https://github.com/MinusKelvin/glfw-sys"
 version = "3.3"
 branch = "umbrella-extras"
+optional = true
+
+[dev-dependencies]
+gl = "0.10.0"
 
 [features]
+default = ["glfw-sys"]
+
 expose-win32 = ["winapi"]
 expose-wgl = ["winapi"]
 #expose-cocoa = ["..."]

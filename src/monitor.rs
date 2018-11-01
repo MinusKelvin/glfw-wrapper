@@ -54,6 +54,12 @@ pub type VideoMode = ffi::GLFWvidmode;
 
 pub struct DisconnectedMonitor(pub(crate) *mut ffi::GLFWmonitor);
 
+impl fmt::Debug for DisconnectedMonitor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DisconnectedMonitor {{ ... }}")
+    }
+}
+
 impl DisconnectedMonitor {
     /// [GLFW Reference][glfw]
     /// 
