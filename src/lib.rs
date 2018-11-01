@@ -285,6 +285,10 @@ impl Glfw {
         &self.shared
     }
 
+    pub fn notifier(&self) -> GlfwNotifier {
+        GlfwNotifier(Arc::downgrade(&self.destruction_locker))
+    }
+
     /// Creates a window and its associated OpenGL or OpenGL ES context.
     /// 
     /// This function does not change what context is current. To make the context for this window
