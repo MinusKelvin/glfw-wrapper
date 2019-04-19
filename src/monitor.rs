@@ -7,6 +7,7 @@ use std::slice;
 use ffi;
 use get_error;
 use Result;
+use util::*;
 
 thread_local! {
     /// Global mutable reference to list of possibly active monitor references.
@@ -108,6 +109,22 @@ impl Monitor {
         let mut p = (0, 0);
         unsafe { ffi::glfwGetMonitorPos(self.get_ptr(), &mut p.0, &mut p.1) };
         get_error().map(|_| p)
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: https://www.glfw.org/docs/3.3/group__monitor.html#ga7387a3bdb64bfe8ebf2b9e54f5b6c9d0
+    pub fn get_workarea(
+        &self,
+        xpos: Option<&mut i32>,
+        ypos: Option<&mut i32>,
+        width: Option<&mut i32>,
+        height: Option<&mut i32>
+    ) -> Result<()> {
+        unsafe {
+            ffi::glfwGetMonitorWorkarea(self.get_ptr(), xpos.ptr(), ypos.ptr(), width.ptr(), height.ptr());
+        }
+        get_error()
     }
 
     /// [GLFW Reference][glfw]

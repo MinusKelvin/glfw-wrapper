@@ -622,7 +622,8 @@ enum_from_primitive! {
     pub enum InputMode {
         StickyKeys = ffi::GLFW_STICKY_KEYS,
         StickyMouseButtons = ffi::GLFW_STICKY_MOUSE_BUTTONS,
-        LockKeyMods = ffi::GLFW_LOCK_KEY_MODS
+        LockKeyMods = ffi::GLFW_LOCK_KEY_MODS,
+        RawMouseMotion = ffi::GLFW_RAW_MOUSE_MOTION
     }
 }
 
@@ -631,7 +632,8 @@ pub enum SetInputMode {
     Cursor(CursorMode),
     StickyKeys(bool),
     StickyMouseButtons(bool),
-    LockKeyMods(bool)
+    LockKeyMods(bool),
+    RawMouseMotion(bool)
 }
 
 /// GLFW library initialization hints.

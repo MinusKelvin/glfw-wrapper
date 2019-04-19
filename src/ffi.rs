@@ -293,6 +293,7 @@ pub const GLFW_CURSOR: c_int = 0x00033001;
 pub const GLFW_STICKY_KEYS: c_int = 0x00033002;
 pub const GLFW_STICKY_MOUSE_BUTTONS: c_int = 0x00033003;
 pub const GLFW_LOCK_KEY_MODS: c_int = 0x00033004;
+pub const GLFW_RAW_MOUSE_MOTION: c_int = 0x00033005;
 
 pub const GLFW_CURSOR_NORMAL: c_int = 0x00034001;
 pub const GLFW_CURSOR_HIDDEN: c_int = 0x00034002;
@@ -396,6 +397,7 @@ extern "C" {
     pub fn glfwGetMonitors(count: *mut c_int) -> *const *mut GLFWmonitor;
     pub fn glfwGetPrimaryMonitor() -> *mut GLFWmonitor;
     pub fn glfwGetMonitorPos(monitor: *mut GLFWmonitor, xpos: *mut c_int, ypos: *mut c_int);
+    pub fn glfwGetMonitorWorkarea(monitor: *mut GLFWmonitor, xpos: *mut c_int, ypos: *mut c_int, width: *mut c_int, height: *mut c_int);
     pub fn glfwGetMonitorPhysicalSize(monitor: *mut GLFWmonitor, widthMM: *mut c_int, heightMM: *mut c_int);
     pub fn glfwGetMonitorContentScale(monitor: *mut GLFWmonitor, xscale: *mut c_float, yscale: *mut c_float);
     pub fn glfwGetMonitorName(monitor: *mut GLFWmonitor) -> *const c_char;
@@ -457,6 +459,7 @@ extern "C" {
     pub fn glfwPostEmptyEvent();
     pub fn glfwGetInputMode(window: *mut GLFWwindow, mode: c_int) -> c_int;
     pub fn glfwSetInputMode(window: *mut GLFWwindow, mode: c_int, value: c_int);
+    pub fn glfwRawMouseMotionSupported() -> c_int;
     pub fn glfwGetKeyName(key: c_int, scancode: c_int) -> *const c_char;
     pub fn glfwGetKeyScancode(key: c_int) -> c_int;
     pub fn glfwGetKey(window: *mut GLFWwindow, key: c_int) -> c_int;

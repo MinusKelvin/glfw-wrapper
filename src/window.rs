@@ -408,6 +408,9 @@ impl<'a> Window<'a> {
             ),
             LockKeyMods(v) => ffi::glfwSetInputMode(
                 self.ptr, ffi::GLFW_LOCK_KEY_MODS, bool_to_cint(v)
+            ),
+            RawMouseMotion(v) => ffi::glfwSetInputMode(
+                self.ptr, ffi::GLFW_RAW_MOUSE_MOTION, bool_to_cint(v)
             )
         } }
         get_error()

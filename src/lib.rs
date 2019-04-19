@@ -1,9 +1,16 @@
 //! A safe Rust wrapper around the [GLFW] library.
+//!
+//! This library attempts to statically enforce the lifetime and threading constraints of the GLFW library.
+//! Some inconvience may arise from this design descision, such as difficulty sending references to
+//! [`SharedGlfw`] to other threads as they cannot outlive their [`Glfw`] instance and `Glfw` cannot be
+//! `Send` due to GLFW's threading constaints.
 //! 
 //! See [the repository] for examples.
 //! 
 //! [GLFW]: http://www.glfw.org/
 //! [the repository]: https://github.com/MinusKelvin/glfw-wrapper
+//! [`SharedGlfw`]: struct.SharedGlfw.html
+//! [`Glfw`]: struct.Glfw.html
 
 #[macro_use]
 extern crate enum_primitive;
@@ -502,6 +509,15 @@ impl Glfw {
     pub fn get_primary_monitor(&self) -> Option<Monitor> {
         unsafe {
             ffi::glfwGetPrimaryMonitor().as_mut().map(|p| Monitor::create_from(p))
+        }
+    }
+
+    /// [GLFW Reference][glfw]
+    /// 
+    /// [glfw]: https://www.glfw.org/docs/3.3/group__input.html#gae4ee0dbd0d256183e1ea4026d897e1c2
+    pub fn is_raw_mouse_motion_supported() -> bool {
+        unsafe {
+            cint_to_bool(ffi::glfwRawMouseMotionSupported())
         }
     }
 
